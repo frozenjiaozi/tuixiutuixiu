@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>提前退休计算器</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1d2129;
+    --text-2: #4e5969;
+    --text-3: #86909c;
+    --line: #e5e6eb;
+    --grid: #eef0f3;
+    --input: #ffffff;
+    --info: #2f6fdb;
+    --info-bg: #eef3fd;
+    --warn: #c47f12;
+    --warn-bg: #fdf6e8;
+    --danger: #c8443a;
+    --danger-bg: #fcefee;
+    --success: #2a8a55;
+    --success-bg: #ecf7f0;
+    --seg-living: #5b8def;
+    --seg-child: #e3a33b;
+    --seg-mort: #9b6dd6;
+    --seg-si: #43aa9d;
+    --seg-one: #d0675f;
+    --income: #1d2129;
+    --band: rgba(47, 111, 219, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181b;
+      --card: #202226;
+      --text: #e8e9eb;
+      --text-2: #b4b8bf;
+      --text-3: #80858d;
+      --line: #33363c;
+      --grid: #2a2d32;
+      --input: #17181b;
+      --info: #6e9bf0;
+      --info-bg: #1f2a3d;
+      --warn: #e0a53f;
+      --warn-bg: #352c1b;
+      --danger: #e6736a;
+      --danger-bg: #3a2322;
+      --success: #5cc08a;
+      --success-bg: #1c3226;
+      --income: #e8e9eb;
+      --band: rgba(110, 155, 240, 0.08);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  .top { max-width: 1440px; margin: 0 auto; padding: 24px 24px 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; }
+  .top h1 { font-size: 26px; margin: 0; line-height: 1.3; }
+  .top .sub { color: var(--text-3); font-size: 13px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--info); color: var(--info); }
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 10px; cursor: pointer; color: var(--text-2); user-select: none; }
+  .chip input { margin: 0; width: 15px; height: 15px; accent-color: var(--info); }
+  .chip:has(input:checked) { border-color: var(--info); background: var(--info-bg); color: var(--info); font-weight: 600; }
+  .chip:has(input:focus-visible) { outline: 2px solid var(--info); outline-offset: 2px; }
+  .chip-sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+  .mode-bar { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .seg { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+  .seg button { flex: 1; border: none; background: none; border-radius: 6px; padding: 5px 0; cursor: pointer; color: var(--text-2); }
+  .seg button.on { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
+  .mode-bar .hint { margin-top: 6px; }
+  .qgroup { padding: 12px 16px 4px; border-bottom: 1px solid var(--line); }
+  .qgroup h4 { margin: 0 0 8px; font-size: 14px; }
+  .assume { padding: 12px 16px 14px; }
+  .assume h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-2); }
+  .assume .kv { grid-template-columns: auto 1fr; font-size: 12px; margin-bottom: 10px; }
+  .assume .kv .k { white-space: nowrap; color: var(--text-3); }
+  .assume .kv .v { text-align: left; color: var(--text-2); }
+  .layout { max-width: 1440px; margin: 0 auto; padding: 16px 24px 48px; display: grid; grid-template-columns: 370px 1fr; gap: 20px; align-items: start; }
+  aside { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  details.group { border-bottom: 1px solid var(--line); }
+  details.group:last-child { border-bottom: none; }
+  details.group > summary { cursor: pointer; list-style: none; padding: 12px 16px; font-weight: 600; display: flex; justify-content: space-between; }
+  details.group > summary::-webkit-details-marker { display: none; }
+  details.group > summary::after { content: "展开"; color: var(--text-3); font-weight: 400; font-size: 12px; }
+  details.group[open] > summary::after { content: "收起"; }
+  .group-body { padding: 0 16px 14px; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; color: var(--text-2); font-size: 13px; margin-bottom: 3px; }
+  .inp { display: flex; align-items: center; gap: 6px; }
+  .inp input, .field select { width: 100%; background: var(--input); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; font-variant-numeric: tabular-nums; }
+  .inp input:focus, .field select:focus, .row-item input:focus { outline: none; border-color: var(--info); }
+  input.bad { border-color: var(--danger) !important; background: var(--danger-bg); }
+  .unit { color: var(--text-3); font-size: 12px; min-width: 30px; }
+  .hint { color: var(--text-3); font-size: 12px; margin-top: 2px; line-height: 1.5; }
+  .toggle { display: flex; gap: 8px; align-items: center; margin: 4px 0 12px; cursor: pointer; color: var(--text-2); font-size: 13px; }
+  .toggle input { width: 16px; height: 16px; accent-color: var(--info); }
+  .row-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--text-2); font-size: 13px; }
+  .row-item input { background: var(--input); border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; width: 64px; font-variant-numeric: tabular-nums; }
+  .row-item input.name { width: 110px; }
+  .row-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 2px; margin-bottom: 8px; }
+  .link { background: none; border: none; color: var(--danger); cursor: pointer; padding: 0 2px; font-size: 12px; }
+  .btn-sm { border: 1px dashed var(--line); background: none; border-radius: 7px; padding: 4px 10px; cursor: pointer; color: var(--text-2); font-size: 13px; margin-bottom: 8px; }
+  .btn-sm:hover { border-color: var(--info); color: var(--info); }
+  .sub-title { font-size: 13px; font-weight: 600; margin: 10px 0 6px; }
+  .grid-2f { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  main { min-width: 0; }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 19px; margin: 0 0 10px; }
+  h3 { font-size: 15px; margin: 0 0 8px; }
+  p { margin: 0 0 8px; }
+  .muted { color: var(--text-3); font-size: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card.tbl { padding: 6px 12px; overflow-x: auto; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+  .stat.good .v { color: var(--success); }
+  .stat.bad .v { color: var(--danger); }
+  .callout { border-radius: 12px; padding: 14px 18px; border: 1px solid; margin-bottom: 14px; }
+  .callout h3 { margin-bottom: 6px; }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  .callout.success { background: var(--success-bg); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+  .callout.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+  .callout.danger { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--text-3); font-weight: 500; font-size: 12px; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.strong td { font-weight: 600; }
+  tr.group td { color: var(--text-3); font-size: 12px; padding-top: 12px; border-bottom: none; }
+  tr.t-success td:first-child { box-shadow: inset 3px 0 0 var(--success); }
+  tr.t-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+  tr.t-danger td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+  tr.t-warn { background: var(--warn-bg); }
+  tr.t-danger { background: var(--danger-bg); }
+  tr.retire td { border-top: 2px solid var(--info); }
+  .pill { display: inline-block; font-size: 12px; padding: 0 8px; border-radius: 999px; }
+  .pill.success { background: var(--success-bg); color: var(--success); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.danger { background: var(--danger-bg); color: var(--danger); }
+  .chart-box { position: relative; }
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  svg .grid { stroke: var(--grid); stroke-width: 1; }
+  svg .zero { stroke: var(--text-3); stroke-width: 1; }
+  svg .axis { fill: var(--text-3); font-size: 12px; }
+  svg .ref { stroke: var(--text-2); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  svg .ref-label { fill: var(--text-2); font-size: 12px; }
+  svg .band { fill: var(--band); }
+  svg .band-label { fill: var(--text-3); font-size: 12px; }
+  svg .line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  svg .guide { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; }
+  svg .hit { fill: transparent; cursor: crosshair; }
+  svg .bar-hit { fill: transparent; }
+  svg .bar-hit:hover { fill: rgba(127, 127, 127, 0.08); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-2); margin: 0 0 8px; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .legend i.dash { height: 0; border-top: 2px dashed var(--text-2); border-radius: 0; vertical-align: 3px; width: 16px; }
+  .legend i.ln { height: 0; border-top: 2px solid var(--income); border-radius: 0; vertical-align: 3px; width: 16px; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.6; min-width: 150px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); display: none; z-index: 2; white-space: nowrap;
+  }
+  .tip b { display: block; margin-bottom: 2px; }
+  .tip .row { display: flex; justify-content: space-between; gap: 14px; }
+  .tip .row span:last-child { font-variant-numeric: tabular-nums; }
+  .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  details.more > summary { cursor: pointer; color: var(--info); font-size: 13px; margin-bottom: 8px; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
+  .kv .k { color: var(--text-2); }
+  .kv .v { text-align: right; font-variant-numeric: tabular-nums; }
+  .kv .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); margin: 4px 0; }
+  .kv .total { font-weight: 600; }
+  @media (max-width: 1100px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; max-height: none; }
+  }
+  @media print {
+    body { background: #fff; }
+    .actions, aside, .tip { display: none !important; }
+    .layout { grid-template-columns: 1fr; }
+    section { break-inside: avoid-page; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>提前退休计算器</h1>
+    <div class="sub">先勾选你家的情况，再在左边填数，右边实时算出：计划的年龄退休要存多少、每月最多能花多少、最早几岁能退。所有金额按今天的购买力计算，年龄都指你的年龄。</div>
+    <div class="chips" id="profile" role="group" aria-label="家庭情况">
+      <label class="chip"><input type="radio" name="marital" value="single">单身</label>
+      <label class="chip"><input type="radio" name="marital" value="married">已婚</label>
+      <span class="chip-sep"></span>
+      <label class="chip"><input type="checkbox" data-flag="hasKids">有孩子</label>
+      <label class="chip"><input type="checkbox" data-flag="hasMortgage">有房贷</label>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btn-export">导出数据</button>
+    <button class="btn" id="btn-import">导入数据</button>
+    <button class="btn" id="btn-print">打印</button>
+    <input type="file" id="file-import" accept="application/json,.json" hidden>
+  </div>
+</div>
+
+<div class="layout">
+  <aside id="form"></aside>
+  <main id="results"></main>
+</div>
+
+<script id="model">
+const DEFAULTS = {
+  age: 29, hasSpouse: true, spouseAge: 29, retireAge: 47, together: true, spouseRetireAge: 47,
+  hasKids: false, hasMortgage: true,
+  afterPension: "covered", endAge: 85,
+  inc1: 5000, inc2: 5000, bonus: 0, incGrowth: 0,
+  assets: 5, ret: 2, infl: 2, floor: 20,
+  livingWork: 5000, livingRetire: 3000,
+  mortMonthly: 2500, mortYears: 20, hfOffset: 1000,
+  children: [],
+  stage: [3200, 2500, 2500, 3000, 3500, 3000], birthCost: 5, eduGrowth: 1, childTax: 400,
+  pensionMode: "formula", pension1: 2300, pension2: 2100,
+  calcBase: 7831, years1: 7, index1: 0.6, years2: 7, index2: 0.6, minYears: 20,
+  pensionAge1: 63, pensionAge2: 58, siAfter: "stop", flexPension: 940, med: 595,
+  oneOffs: [{ name: "换车", age: 35, amount: 10 }],
+  incomes: [],
+  shock1: { from: null, gap: 1, factor: 50 },
+  shock2: { from: null, gap: 1, factor: 70 },
+};
+
+const CALC_MONTHS = {
+  40: 233, 41: 230, 42: 226, 43: 223, 44: 220, 45: 216, 46: 212, 47: 207, 48: 204, 49: 199, 50: 195,
+  51: 190, 52: 185, 53: 180, 54: 175, 55: 170, 56: 164, 57: 158, 58: 152, 59: 145, 60: 139,
+  61: 132, 62: 125, 63: 117, 64: 109, 65: 101, 66: 93, 67: 84, 68: 75, 69: 65, 70: 56,
+};
+const calcMonths = (age) => CALC_MONTHS[Math.max(40, Math.min(70, Math.round(age)))];
+const stageIdx = (c) => (c <= 2 ? 0 : c <= 5 ? 1 : c <= 11 ? 2 : c <= 14 ? 3 : c <= 17 ? 4 : 5);
+
+function factorAt(bands, a) {
+  let f = 1;
+  for (const [s, e, v] of bands) if (a >= s && a < e) f = v;
+  return f;
+}
+
+function shockBands(sh) {
+  if (!sh || sh.from === null || sh.from === "" || !isFinite(sh.from)) return [];
+  const from = Math.round(+sh.from);
+  const gap = Math.max(0, Math.round(+sh.gap || 0));
+  return [[from, from + gap, 0], [from + gap, 999, Math.max(0, +sh.factor || 0) / 100]];
+}
+
+function pensionAnnual(base, index, years, claimAge) {
+  const basic = (base * (1 + index)) / 2 * years / 100;
+  const account = base * index * 0.08 * 12 * years;
+  return (basic + account / calcMonths(claimAge)) * 12;
+}
+
+function lastPensionAge(s) {
+  return s.hasSpouse ? Math.max(s.pensionAge1, s.age + (s.pensionAge2 - s.spouseAge)) : s.pensionAge1;
+}
+
+function toParams(s) {
+  const sp = !!s.hasSpouse;
+  const covered = s.afterPension === "covered";
+  const lastPension = lastPensionAge(s);
+  return {
+    age: s.age, sp, age2: sp ? s.spouseAge : 0, together: !!s.together,
+    retire1: s.retireAge,
+    retire2: sp ? (s.together ? s.spouseAge + (s.retireAge - s.age) : s.spouseRetireAge) : 0,
+    covered, lastPension,
+    endAge: covered ? lastPension - 1 : s.endAge,
+    inc1: s.inc1 * 12, inc2: sp ? s.inc2 * 12 : 0, bonus: s.bonus * 1e4, g: s.incGrowth / 100,
+    assets: s.assets * 1e4, r: s.ret / 100, infl: s.infl / 100, floor: s.floor * 1e4,
+    livingWork: s.livingWork * 12, livingRetire: s.livingRetire * 12,
+    mort: s.hasMortgage ? s.mortMonthly * 12 : 0, mortYears: s.hasMortgage ? s.mortYears : 0, hf: s.hasMortgage ? s.hfOffset * 12 : 0,
+    children: s.hasKids ? s.children.map((c) => c.birthAge) : [],
+    stage: s.stage.map((x) => x * 12), birthCost: s.birthCost * 1e4, edu: s.eduGrowth / 100, childTax: s.childTax * 12,
+    mode: s.pensionMode, pension1: s.pension1 * 12, pension2: sp ? s.pension2 * 12 : 0,
+    base: s.calcBase, years1: s.years1, idx1: s.index1, years2: s.years2, idx2: s.index2, minYears: s.minYears,
+    pAge1: s.pensionAge1, pAge2: sp ? s.pensionAge2 : 999, siAfter: s.siAfter, flex: s.flexPension * 12, med: s.med * 12,
+    oneOffs: s.oneOffs.map((o) => ({ name: o.name, age: o.age, amount: o.amount * 1e4 })),
+    incomes: s.incomes.map((o) => ({ name: o.name, amount: o.monthly * 12, from: o.from, to: o.to })),
+    shock1: shockBands(s.shock1), shock2: sp ? shockBands(s.shock2) : [],
+  };
+}
+
+function simulate(p, livingWork) {
+  const N = Math.max(0, p.endAge - p.age);
+  const emp1 = [], emp2 = [];
+  let e1 = p.years1, e2 = p.years2;
+  for (let t = 0; t <= N; t++) {
+    const a1 = p.age + t, a2 = p.age2 + t;
+    const f1 = a1 < p.retire1 ? factorAt(p.shock1, a1) : 0;
+    const f2 = p.sp && a2 < p.retire2 ? factorAt(p.shock2, a2) : 0;
+    emp1.push(f1);
+    emp2.push(f2);
+    if (f1 > 0 && a1 < p.pAge1) e1++;
+    if (f2 > 0 && a2 < p.pAge2) e2++;
+  }
+  const selfPay = (emp, startAge, pAge, years, active) => {
+    const pay = new Array(N + 1).fill(0);
+    let y = years;
+    if (!active) return { pay, y };
+    for (let t = 0; t <= N; t++) {
+      if (emp[t] > 0 || startAge + t >= pAge) continue;
+      if (p.siAfter === "continue" || (p.mode === "formula" && y < p.minYears)) {
+        pay[t] = p.flex;
+        y++;
+      }
+    }
+    return { pay, y };
+  };
+  const s1 = selfPay(emp1, p.age, p.pAge1, e1, true);
+  const s2 = selfPay(emp2, p.age2, p.pAge2, e2, p.sp);
+  const pen1 = p.mode === "formula" ? pensionAnnual(p.base, p.idx1, s1.y, p.pAge1) : p.pension1;
+  const pen2 = !p.sp ? 0 : p.mode === "formula" ? pensionAnnual(p.base, p.idx2, s2.y, p.pAge2) : p.pension2;
+
+  const baseInc = p.inc1 + p.inc2;
+  const rows = [];
+  for (let t = 0; t <= N; t++) {
+    const a1 = p.age + t, a2 = p.age2 + t;
+    const f1 = emp1[t], f2 = emp2[t];
+    const grow = Math.pow(1 + p.g, t);
+    const share = baseInc > 0 ? (p.inc1 * f1 + p.inc2 * f2) / baseInc : 0;
+    const salary = (p.inc1 * f1 + p.inc2 * f2) * grow;
+    const bonus = p.bonus * share * grow;
+    const hf = t < p.mortYears ? p.hf * share : 0;
+    const mort = t < p.mortYears ? p.mort / Math.pow(1 + p.infl, t + 0.5) : 0;
+    const working = a1 < p.retire1;
+    const living = working ? livingWork : p.livingRetire;
+    const anyWork = f1 > 0 || f2 > 0;
+    let child = 0, childBirth = 0;
+    for (const b of p.children) {
+      const c = a1 - b;
+      if (c === 0) childBirth += p.birthCost;
+      if (c >= 0 && c <= 21) child += Math.max(0, p.stage[stageIdx(c)] * Math.pow(1 + p.edu, t) - (anyWork ? p.childTax : 0));
+    }
+    child += childBirth;
+    const med = (f1 === 0 && a1 < p.pAge1 ? p.med : 0) + (p.sp && f2 === 0 && a2 < p.pAge2 ? p.med : 0);
+    const si = s1.pay[t] + s2.pay[t];
+    const pension = (a1 >= p.pAge1 ? pen1 : 0) + (p.sp && a2 >= p.pAge2 ? pen2 : 0);
+    let other = 0;
+    for (const o of p.incomes) if (a1 >= o.from && a1 <= o.to) other += o.amount;
+    let one = 0;
+    for (const o of p.oneOffs) if (a1 === o.age) one += o.amount;
+    const inflow = salary + bonus + hf + pension + other;
+    const outflow = living + mort + child + med + si + one;
+    rows.push({ t, a1, a2, working, f1, f2, salary, bonus, hf, pension, other, living, mort, child, childBirth, med, si, one, net: inflow - outflow });
+  }
+  return { rows, y1: s1.y, y2: s2.y, pen1, pen2 };
+}
+
+function analyze(p) {
+  const sim = simulate(p, 0);
+  const rows = sim.rows;
+  const N = rows.length - 1;
+  const T = Math.max(0, Math.min(N + 1, p.retire1 - p.age));
+  const r = p.r, s = Math.sqrt(1 + r);
+  let A = p.assets, FV = 0;
+  for (let t = 0; t < T; t++) {
+    A = A * (1 + r) + rows[t].net * s;
+    FV = FV * (1 + r) + s;
+  }
+  let C = 0, disc = 1, need = p.floor;
+  for (let t = T; t <= N; t++) {
+    C = C * (1 + r) + rows[t].net * s;
+    disc *= 1 + r;
+    need = Math.max(need, (p.floor - C) / disc);
+  }
+  const have = A - p.livingWork * FV;
+  return { T, N, need, have, gap: have - need, ceiling: FV > 0 ? (A - need) / FV / 12 : NaN, P0: A, FV, rows, sim };
+}
+
+function assetPath(p, a, livingWork) {
+  const s = Math.sqrt(1 + p.r);
+  let A = p.assets;
+  const out = [];
+  for (const row of a.rows) {
+    out.push({ age: row.a1, assets: A });
+    A = A * (1 + p.r) + (row.net - (row.working ? livingWork : 0)) * s;
+  }
+  out.push({ age: p.age + a.rows.length, assets: A });
+  return out;
+}
+
+function withRetire(p, R) {
+  return { ...p, retire1: R, retire2: p.sp ? (p.together ? p.age2 + (R - p.age) : p.retire2) : 0 };
+}
+
+function earliest(p) {
+  const max = Math.min(p.endAge, 75);
+  for (let R = p.age + 1; R <= max; R++) if (analyze(withRetire(p, R)).gap >= 0) return R;
+  return null;
+}
+
+function riskAges(p) {
+  const R = p.retire1;
+  const a5 = Math.max(p.age + 1, R - 5), a10 = Math.max(p.age + 1, R - 10);
+  return { a5, a10, s5: p.age2 + (a5 - p.age), s10: p.age2 + (a10 - p.age) };
+}
+
+function scenarioList(p) {
+  const R = p.retire1;
+  const { a5, a10, s5, s10 } = riskAges(p);
+  const list = [{ id: "base", name: "当前设定", job: true, p }];
+  const job = (id, name, h, w) => list.push({ id, name, job: true, p: { ...p, shock1: h, shock2: p.sp ? w : [] } });
+  if (R - p.age >= 2) {
+    job("h10cut30", `你 ${a10} 岁起降薪 30%`, [[a10, 999, 0.7]], []);
+    job("h5gap1half", `你 ${a5} 岁失业 1 年，之后收入减半`, [[a5, a5 + 1, 0], [a5 + 1, 999, 0.5]], []);
+    job("h5out", `你 ${a5} 岁后再也找不到工作`, [[a5, 999, 0]], []);
+    if (a10 < a5) job("h10out", `你 ${a10} 岁后再也找不到工作`, [[a10, 999, 0]], []);
+    if (p.sp) {
+      job("w10gap1cut30", `配偶 ${s10} 岁失业 1 年，之后降薪 30%`, [], [[s10, s10 + 1, 0], [s10 + 1, 999, 0.7]]);
+      job("both5cut30", `两人从你 ${a5} 岁起都降薪 30%`, [[a5, 999, 0.7]], [[s5, 999, 0.7]]);
+    }
+  }
+  list.push({ id: "r-1", name: "投资收益每年少 1 个百分点", job: false, p: { ...p, r: p.r - 0.01 } });
+  list.push({ id: "spend+1000", name: "退休后每月多花 1,000", job: false, p: { ...p, livingRetire: p.livingRetire + 12000 } });
+  if (p.covered) {
+    list.push({
+      id: "pension+2",
+      name: "领养老金的年龄再推迟 2 年",
+      job: false,
+      p: { ...p, pAge1: p.pAge1 + 2, pAge2: p.sp ? p.pAge2 + 2 : p.pAge2, lastPension: p.lastPension + 2, endAge: p.endAge + 2 },
+    });
+  } else {
+    list.push({ id: "live+5", name: `多活 5 年（存款撑到 ${p.endAge + 5} 岁）`, job: false, p: { ...p, endAge: p.endAge + 5 } });
+  }
+  list.push({ id: "later1", name: `晚 1 年退休（${R + 1} 岁）`, job: false, p: withRetire(p, R + 1) });
+  if (R - 1 > p.age) list.push({ id: "earlier1", name: `早 1 年退休（${R - 1} 岁）`, job: false, p: withRetire(p, R - 1) });
+  return list;
+}
+</script>
+
+<script>
+const KEY = "fire-calculator-v1";
+const STAGES = ["0–2 岁", "3–5 岁（幼儿园）", "6–11 岁（小学）", "12–14 岁（初中）", "15–17 岁（高中）", "18–21 岁（大学）"];
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const isNum = (x) => typeof x === "number" && isFinite(x);
+
+function sanitize(raw) {
+  const s = clone(DEFAULTS);
+  if (!raw || typeof raw !== "object") return s;
+  for (const k of Object.keys(s)) {
+    const d = s[k], v = raw[k];
+    if (v === undefined) continue;
+    if (Array.isArray(d)) {
+      if (!Array.isArray(v)) continue;
+      if (k === "stage") s[k] = d.map((x, i) => (isNum(v[i]) ? v[i] : x));
+      else s[k] = v.filter((x) => x && typeof x === "object");
+    } else if (d && typeof d === "object") {
+      if (v && typeof v === "object") s[k] = { ...d, ...v };
+    } else if (typeof d === typeof v) {
+      s[k] = v;
+    }
+  }
+  if (typeof raw.hasKids !== "boolean") s.hasKids = s.children.length > 0;
+  if (typeof raw.hasMortgage !== "boolean") s.hasMortgage = s.mortMonthly > 0 && s.mortYears > 0;
+  return s;
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return sanitize(JSON.parse(raw));
+  } catch (e) {}
+  return clone(DEFAULTS);
+}
+let S = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
+
+const fmt = (n) => Math.round(n).toLocaleString("zh-CN");
+const floor100 = (x) => Math.floor(x / 100) * 100;
+const wan = (v) => {
+  const x = Math.abs(v / 1e4);
+  const n = x < 10 ? Math.round(x * 10) / 10 : Math.round(x);
+  return (v < 0 && n > 0 ? "−" : "") + n + " 万";
+};
+const signedWan = (v) => (v >= 0 ? "+" : "−") + wan(Math.abs(v));
+const w1 = (v) => (Math.round(v / 1000) / 10).toFixed(1);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const ceilText = (c) => (isFinite(c) && floor100(c) >= 1000 ? `${fmt(floor100(c))} 元` : "怎么省都不够");
+const thisYear = new Date().getFullYear();
+
+const F = (key, label, unit, opt = {}) => ({ type: "num", key, label, unit, ...opt });
+const TG = (key, label, opt = {}) => ({ type: "bool", key, label, ...opt });
+const SEL = (key, label, options, opt = {}) => ({ type: "select", key, label, options, ...opt });
+const hasSp = (s) => s.hasSpouse;
+const formula = (s) => s.pensionMode === "formula";
+
+const GROUPS = [
+  { title: "家庭和时间", open: true, fields: [
+    F("age", "你现在的年龄", "岁", { int: true }),
+    F("spouseAge", "配偶现在的年龄", "岁", { int: true, show: hasSp }),
+    F("retireAge", "你计划几岁退休", "岁", { int: true, hint: "从这一年起不再上班，开始花存款" }),
+    TG("together", "配偶和你同一年停工", { show: hasSp }),
+    F("spouseRetireAge", "配偶几岁停工", "岁", { int: true, show: (s) => s.hasSpouse && !s.together }),
+    SEL("afterPension", "领养老金以后", [["covered", "养老金够日常生活，存款只撑到领养老金"], ["model", "按实际养老金算，存款撑到指定年龄"]]),
+    F("endAge", "存款要撑到你几岁", "岁", { int: true, show: (s) => s.afterPension === "model" }),
+  ] },
+  { title: "收入（到手，按今天的钱）", open: true, fields: [
+    F("inc1", "你每月到手", "元"),
+    F("inc2", "配偶每月到手", "元", { show: hasSp }),
+    F("bonus", (s) => (s.hasSpouse ? "年终奖（两人每年合计）" : "年终奖（每年）"), "万"),
+    F("incGrowth", "收入每年比物价多涨", "%", { hint: "保守可以填 0" }),
+  ] },
+  { title: "存款和收益", open: true, fields: [
+    F("assets", "现有存款", "万", { hint: "能动用的钱，不含房子" }),
+    F("ret", "投资每年收益（扣除通胀）", "%"),
+    F("infl", "每年通胀", "%"),
+    F("floor", "退休后至少留的备用金", "万", { hint: "应急金、父母备用金等。退休期间存款任何时候都不低于这个数，领养老金时还剩这么多" }),
+  ] },
+  { title: "开销（按今天的钱）", open: true, fields: [
+    F("livingWork", "工作期间每月开销", "元", { hint: "家庭日常开销，租房的话含房租；不含房贷和孩子" }),
+    F("livingRetire", "退休后每月生活费", "元", { hint: "不含房贷、孩子和社保医保" }),
+  ] },
+  { title: "房贷", show: (s) => s.hasMortgage, fields: [
+    F("mortMonthly", "每月月供", "元", { hint: "合同金额，固定不变" }),
+    F("mortYears", "还剩几年", "年", { int: true }),
+    F("hfOffset", "公积金每月冲抵", "元", { hint: "只在上班期间有，失业、降薪时按收入比例减少" }),
+  ] },
+  { title: "孩子", show: (s) => s.hasKids, custom: () => renderChildren() },
+  { title: "社保和养老金", fields: [
+    SEL("pensionMode", "养老金怎么算", [["formula", "按公式估算"], ["direct", "直接填每月金额"]]),
+    F("pension1", "你每月养老金", "元", { show: (s) => !formula(s), hint: "按今天的钱" }),
+    F("pension2", "配偶每月养老金", "元", { show: (s) => !formula(s) && s.hasSpouse }),
+    F("calcBase", "当地计发基数", "元/月", { show: formula, hint: "各省每年公布，在当地人社部门网站能查到" }),
+    F("years1", "你已交养老保险", "年", { show: formula }),
+    F("index1", "你的缴费指数", "", { show: formula, hint: "按最低基数交是 0.6，按平均工资交是 1，换过工作就取个平均" }),
+    F("years2", "配偶已交养老保险", "年", { show: (s) => formula(s) && s.hasSpouse }),
+    F("index2", "配偶的缴费指数", "", { show: (s) => formula(s) && s.hasSpouse }),
+    F("minYears", "领养老金最少要交", "年", { show: formula, hint: "2039 年起为 20 年" }),
+    F("pensionAge1", "你几岁领养老金", "岁", { int: true }),
+    F("pensionAge2", "配偶几岁领养老金", "岁", { int: true, show: hasSp }),
+    SEL("siAfter", "停工后养老保险", [["stop", "停交（不够最低年限就补够）"], ["continue", "自己交到领养老金"]]),
+    F("flexPension", "自己交养老保险，每人每月", "元", { hint: "按当地灵活就业人员的最低档填" }),
+    F("med", "停工后自己交医保，每人每月", "元", { hint: "交到领养老金为止；按当地灵活就业人员职工医保的标准填" }),
+  ] },
+  { title: "一次性大额支出", custom: () => renderOneOffs() },
+  { title: "其他收入", custom: () => renderIncomes() },
+  { title: "职业风险（放进计划里）", custom: () => renderShocks() },
+];
+
+const FIELD = Object.fromEntries(GROUPS.flatMap((g) => g.fields || []).map((f) => [f.key, f]));
+const QUICK_GROUPS = [
+  { title: "家庭和时间", keys: ["age", "spouseAge", "retireAge", "together", "spouseRetireAge"] },
+  { title: "收入和存款", keys: ["inc1", "inc2", "bonus", "assets"] },
+  { title: "开销", keys: ["livingWork", "livingRetire"] },
+  { title: "房贷", show: (s) => s.hasMortgage, keys: ["mortMonthly", "mortYears", "hfOffset"] },
+  { title: "孩子", show: (s) => s.hasKids, custom: () => renderChildren(false) },
+];
+
+function assumptionsHTML() {
+  const sp = S.hasSpouse;
+  const items = [
+    ["投资收益", `每年 ${S.ret}%（扣除通胀），通胀 ${S.infl}%`],
+    ["收入增长", S.incGrowth ? `每年比物价多涨 ${S.incGrowth}%` : "不涨（只跟上物价）"],
+    ["备用金", `退休后至少留 ${S.floor} 万`],
+    ["领养老金以后", S.afterPension === "covered" ? "养老金够日常生活，存款只撑到领养老金" : `按实际养老金，存款撑到你 ${S.endAge} 岁`],
+    ["领养老金年龄", sp ? `你 ${S.pensionAge1} 岁，配偶 ${S.pensionAge2} 岁` : `${S.pensionAge1} 岁`],
+    [
+      "养老金",
+      formula(S)
+        ? `按公式估算：${sp ? `你已交 ${S.years1} 年、配偶已交 ${S.years2} 年` : `已交 ${S.years1} 年`}，缴费指数 ${sp ? `${S.index1} / ${S.index2}` : S.index1}`
+        : `每月${sp ? ` 你 ${fmt(S.pension1)}、配偶 ${fmt(S.pension2)}` : ` ${fmt(S.pension1)}`} 元`,
+    ],
+    ["停工后社保医保", `${S.siAfter === "continue" ? "养老保险自己交到领养老金" : "养老保险停交，不够最低年限的补够"}；医保每人每月 ${fmt(S.med)} 元`],
+  ];
+  if (S.hasKids && S.children.length) items.push(["孩子每月花费", `${STAGES.map((l, i) => fmt(S.stage[i])).join(" / ")} 元（按年龄段）`]);
+  if (S.oneOffs.length) items.push(["一次性支出", S.oneOffs.map((o) => `${esc(o.name)}（${o.age} 岁 ${o.amount} 万）`).join("、")]);
+  if (S.incomes.length) items.push(["其他收入", S.incomes.map((o) => `${esc(o.name)} 每月 ${fmt(o.monthly)}`).join("、")]);
+  const shocks = [["你", S.shock1], ...(sp ? [["配偶", S.shock2]] : [])].filter(([, x]) => x.from !== null && x.from !== "");
+  if (shocks.length) items.push(["职业风险", shocks.map(([w, x]) => `${w} ${x.from} 岁起失业 ${x.gap} 年`).join("、")]);
+  return `<div class="assume"><h4>其余按下面的设定估算</h4>
+    <div class="kv">${items.map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join("")}</div>
+    <button class="btn-sm" data-mode="full">去详细设置里修改</button></div>`;
+}
+
+function numInput(path, value, kind, cls = "") {
+  const v = value === null || value === undefined ? "" : value;
+  return `<input type="text" inputmode="decimal" class="${cls}" data-path="${path}" data-kind="${kind}" value="${esc(v)}">`;
+}
+
+function fieldHTML(f) {
+  if (f.show && !f.show(S)) return "";
+  const label = typeof f.label === "function" ? f.label(S) : f.label;
+  if (f.type === "bool") {
+    return `<label class="toggle"><input type="checkbox" data-path="${f.key}" data-kind="bool" ${S[f.key] ? "checked" : ""}><span>${label}</span></label>`;
+  }
+  if (f.type === "select") {
+    const opts = f.options.map(([v, l]) => `<option value="${v}" ${S[f.key] === v ? "selected" : ""}>${l}</option>`).join("");
+    return `<div class="field"><label>${label}</label><select data-path="${f.key}" data-kind="select">${opts}</select></div>`;
+  }
+  return `<div class="field"><label>${label}</label><div class="inp">${numInput(f.key, S[f.key], f.int ? "int" : "num")}<span class="unit">${f.unit}</span></div>${f.hint ? `<div class="hint">${f.hint}</div>` : ""}</div>`;
+}
+
+function renderChildren(full = true) {
+  const rows = S.children
+    .map((c, i) => `<div class="row-item"><span>孩子 ${i + 1}：出生那年你</span>${numInput(`children.${i}.birthAge`, c.birthAge, "int")}<span>岁</span><button class="link" data-action="del" data-list="children" data-i="${i}">删除</button></div>`)
+    .join("");
+  const costs = S.children.length && full
+    ? `<div class="sub-title">每个孩子每月花多少（元）</div>
+       <div class="grid-2f">${STAGES.map((l, i) => `<div class="field"><label>${l}</label><div class="inp">${numInput(`stage.${i}`, S.stage[i], "num")}</div></div>`).join("")}</div>
+       <div class="hint" style="margin:-4px 0 10px">可以把育儿补贴、老人帮带的补贴算进对应阶段。只供到高中就把大学填 0。</div>
+       ${fieldHTML(F("birthCost", "备孕和生孩子（一次性）", "万", { hint: "已出生的孩子不算" }))}
+       ${fieldHTML(F("eduGrowth", "孩子花费每年比物价多涨", "%"))}
+       ${fieldHTML(F("childTax", "上班期间每个孩子每月少交的个税", "元", { hint: "子女教育、婴幼儿照护专项扣除省下的税" }))}`
+    : "";
+  return `<div class="hint" style="margin-bottom:8px">已出生的孩子，填他出生那年你的年龄。</div>${rows}
+    <button class="btn-sm" data-action="add" data-list="children">＋ 添加孩子</button>${costs}`;
+}
+
+function renderOneOffs() {
+  const rows = S.oneOffs
+    .map((o, i) => `<div class="row-card"><div class="row-item"><input class="name" type="text" data-path="oneOffs.${i}.name" data-kind="text" value="${esc(o.name)}"><span>你</span>${numInput(`oneOffs.${i}.age`, o.age, "int")}<span>岁时</span>${numInput(`oneOffs.${i}.amount`, o.amount, "num")}<span>万</span><button class="link" data-action="del" data-list="oneOffs" data-i="${i}">删除</button></div></div>`)
+    .join("");
+  return `<div class="hint" style="margin-bottom:8px">比如换车、翻修房子、给父母看病、给孩子的首付。</div>${rows}
+    <button class="btn-sm" data-action="add" data-list="oneOffs">＋ 添加一笔</button>`;
+}
+
+function renderIncomes() {
+  const rows = S.incomes
+    .map((o, i) => `<div class="row-card"><div class="row-item"><input class="name" type="text" data-path="incomes.${i}.name" data-kind="text" value="${esc(o.name)}">${numInput(`incomes.${i}.monthly`, o.monthly, "num")}<span>元/月</span><button class="link" data-action="del" data-list="incomes" data-i="${i}">删除</button></div>
+      <div class="row-item"><span>从你</span>${numInput(`incomes.${i}.from`, o.from, "int")}<span>岁到</span>${numInput(`incomes.${i}.to`, o.to, "int")}<span>岁（含）</span></div></div>`)
+    .join("");
+  return `<div class="hint" style="margin-bottom:8px">工资和养老金以外的收入，比如房租、兼职。按今天的钱填。</div>${rows}
+    <button class="btn-sm" data-action="add" data-list="incomes">＋ 添加一项</button>`;
+}
+
+function renderShocks() {
+  const one = (key, who) => `<div class="sub-title">${who}</div>
+    <div class="row-item"><span>${who === "你" ? "你" : "配偶"}</span>${numInput(`${key}.from`, S[key].from, "opt")}<span>岁起失业</span>${numInput(`${key}.gap`, S[key].gap, "int")}<span>年</span></div>
+    <div class="row-item"><span>之后收入是原来的</span>${numInput(`${key}.factor`, S[key].factor, "num")}<span>%</span></div>`;
+  return `<div class="hint">年龄空着表示不考虑。填了以后，所有结果都按这种情况算。不管填不填，右边的压力测试都会另外测几种常见情况。</div>
+    ${one("shock1", "你")}${S.hasSpouse ? one("shock2", "配偶") : ""}`;
+}
+
+const MODE_KEY = "fire-calculator-mode";
+let MODE = "quick";
+try { MODE = localStorage.getItem(MODE_KEY) === "full" ? "full" : "quick"; } catch (e) {}
+
+const openState = {};
+function renderForm() {
+  const form = document.getElementById("form");
+  form.querySelectorAll("details.group").forEach((d) => (openState[d.dataset.gi] = d.open));
+  const bar = `<div class="mode-bar">
+    <div class="seg" role="group" aria-label="填写方式">
+      <button data-mode="quick" class="${MODE === "quick" ? "on" : ""}" aria-pressed="${MODE === "quick"}">快速填写</button>
+      <button data-mode="full" class="${MODE === "full" ? "on" : ""}" aria-pressed="${MODE === "full"}">详细设置</button>
+    </div>
+    <div class="hint">${MODE === "quick" ? "只填最关键的几项，其余用默认值估算，列在最下面。" : "所有设定都能改。快速填写里没有的项，也在这里。"}</div>
+  </div>`;
+  const body = MODE === "quick"
+    ? QUICK_GROUPS.filter((g) => !g.show || g.show(S))
+        .map((g) => `<div class="qgroup"><h4>${g.title}</h4>${g.custom ? g.custom() : g.keys.map((k) => fieldHTML(FIELD[k])).join("")}</div>`).join("") + assumptionsHTML()
+    : GROUPS.map((g, i) => {
+        if (g.show && !g.show(S)) return "";
+        const open = openState[i] ?? !!g.open;
+        const inner = g.custom ? g.custom() : g.fields.map(fieldHTML).join("");
+        return `<details class="group" data-gi="${i}" ${open ? "open" : ""}><summary>${g.title}</summary><div class="group-body">${inner}</div></details>`;
+      }).join("");
+  form.innerHTML = bar + body;
+}
+
+function getPath(o, path) {
+  return path.split(".").reduce((x, k) => (x == null ? x : x[k]), o);
+}
+function setPath(o, path, v) {
+  const ks = path.split(".");
+  let x = o;
+  for (let i = 0; i < ks.length - 1; i++) x = x[ks[i]];
+  x[ks[ks.length - 1]] = v;
+}
+
+let timer = null;
+function scheduleRender() {
+  clearTimeout(timer);
+  timer = setTimeout(renderResults, 150);
+}
+
+const formEl = document.getElementById("form");
+formEl.addEventListener("input", (e) => {
+  const el = e.target;
+  const path = el.dataset.path, kind = el.dataset.kind;
+  if (!path || kind === "bool" || kind === "select") return;
+  if (kind === "text") {
+    setPath(S, path, el.value);
+  } else {
+    const raw = el.value.trim().replace(/,/g, "");
+    if (raw === "" && kind === "opt") {
+      setPath(S, path, null);
+    } else {
+      const n = Number(raw);
+      if (raw === "" || !isFinite(n)) {
+        el.classList.add("bad");
+        return;
+      }
+      setPath(S, path, kind === "num" ? n : Math.round(n));
+    }
+    el.classList.remove("bad");
+  }
+  save();
+  scheduleRender();
+});
+formEl.addEventListener("change", (e) => {
+  const el = e.target;
+  const path = el.dataset.path, kind = el.dataset.kind;
+  if (kind !== "bool" && kind !== "select") return;
+  setPath(S, path, kind === "bool" ? el.checked : el.value);
+  save();
+  renderForm();
+  renderResults();
+});
+formEl.addEventListener("click", (e) => {
+  const mb = e.target.closest("[data-mode]");
+  if (mb) {
+    MODE = mb.dataset.mode;
+    try { localStorage.setItem(MODE_KEY, MODE); } catch (err) {}
+    renderForm();
+    formEl.scrollTop = 0;
+    return;
+  }
+  const b = e.target.closest("[data-action]");
+  if (!b) return;
+  e.preventDefault();
+  const list = b.dataset.list;
+  if (b.dataset.action === "del") S[list].splice(+b.dataset.i, 1);
+  else if (list === "children") S.children.push({ birthAge: S.age + 1 });
+  else if (list === "oneOffs") S.oneOffs.push({ name: "大额支出", age: S.age + 5, amount: 10 });
+  else if (list === "incomes") S.incomes.push({ name: "其他收入", monthly: 1000, from: S.retireAge, to: S.retireAge + 9 });
+  save();
+  renderForm();
+  renderResults();
+});
+
+const profileEl = document.getElementById("profile");
+function syncProfile() {
+  profileEl.querySelector(`[value="${S.hasSpouse ? "married" : "single"}"]`).checked = true;
+  profileEl.querySelectorAll("[data-flag]").forEach((x) => (x.checked = !!S[x.dataset.flag]));
+}
+profileEl.addEventListener("change", (e) => {
+  const x = e.target;
+  if (x.name === "marital") S.hasSpouse = x.value === "married";
+  else if (x.dataset.flag) S[x.dataset.flag] = x.checked;
+  if (S.hasKids && !S.children.length) S.children.push({ birthAge: S.age + 1 });
+  if (S.hasMortgage && S.mortMonthly <= 0 && S.mortYears <= 0) Object.assign(S, { mortMonthly: DEFAULTS.mortMonthly, mortYears: DEFAULTS.mortYears, hfOffset: DEFAULTS.hfOffset });
+  save();
+  renderForm();
+  renderResults();
+});
+document.getElementById("btn-export").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `提前退休计算器数据-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+document.getElementById("btn-import").addEventListener("click", () => document.getElementById("file-import").click());
+document.getElementById("file-import").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      S = sanitize(JSON.parse(reader.result));
+      syncProfile();
+      save();
+      renderForm();
+      renderResults();
+    } catch (err) {
+      alert("这个文件读不出来，请选择之前导出的 .json 文件。");
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+document.getElementById("btn-print").addEventListener("click", () => window.print());
+
+function validate(s) {
+  const errs = [];
+  const int = (v) => Number.isInteger(v);
+  if (!int(s.age) || s.age < 16 || s.age > 80) errs.push("你现在的年龄要在 16 到 80 岁之间。");
+  if (!int(s.retireAge) || s.retireAge <= s.age) errs.push("计划退休年龄要大于现在的年龄。");
+  if (s.afterPension === "covered") {
+    const last = lastPensionAge(s);
+    if (!int(s.pensionAge1) || (s.hasSpouse && !int(s.pensionAge2))) errs.push("领养老金的年龄要填整数。");
+    else if (last <= s.retireAge) errs.push(`计划退休年龄要早于领养老金的年龄（${s.hasSpouse ? "两人都开始领养老金时" : "开始领养老金时"}你 ${last} 岁）。`);
+  } else {
+    if (!int(s.endAge) || s.endAge <= s.retireAge) errs.push("“存款要撑到你几岁”要大于计划退休年龄。");
+    if (s.endAge - s.age > 90) errs.push("规划时间太长了，请把“存款要撑到你几岁”改小一点。");
+  }
+  if (s.hasSpouse && (!int(s.spouseAge) || s.spouseAge < 16 || s.spouseAge > 80)) errs.push("配偶的年龄要在 16 到 80 岁之间。");
+  if (s.ret <= -50 || s.ret > 30) errs.push("投资收益请填 −50% 到 30% 之间的数。");
+  if (s.mortYears < 0) errs.push("房贷剩余年数不能是负数。");
+  if (s.stage.some((x) => x < 0)) errs.push("孩子的花费不能是负数。");
+  return errs;
+}
+
+function niceStep(range, ticks = 6) {
+  const raw = range / ticks || 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * mag;
+}
+const NS = "http://www.w3.org/2000/svg";
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function label(parent, x, y, text, attrs) {
+  const t = el("text", { x, y, ...attrs }, parent);
+  t.textContent = text;
+  return t;
+}
+function makeTip(box) {
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  box.appendChild(tip);
+  return {
+    show(html, evt) {
+      tip.innerHTML = html;
+      tip.style.display = "block";
+      const r = box.getBoundingClientRect();
+      let x = evt.clientX - r.left + 14;
+      if (x + tip.offsetWidth > r.width) x = evt.clientX - r.left - tip.offsetWidth - 14;
+      tip.style.left = Math.max(0, x) + "px";
+      tip.style.top = evt.clientY - r.top + 14 + "px";
+    },
+    hide() { tip.style.display = "none"; },
+  };
+}
+const tipRow = (color, name, value) =>
+  `<div class="row"><span>${color ? `<i style="background:${color}"></i>` : ""}${name}</span><span>${value}</span></div>`;
+
+function yScale(values, H, m, minZero = true) {
+  let lo = Math.min(...values), hi = Math.max(...values);
+  if (minZero) lo = Math.min(0, lo);
+  hi = Math.max(hi, lo + 1);
+  const step = niceStep(hi - lo);
+  lo = Math.floor(lo / step) * step;
+  hi = Math.ceil((hi * 1.04) / step) * step;
+  const Y = (v) => H - m.b - ((v - lo) / (hi - lo)) * (H - m.t - m.b);
+  return { lo, hi, step, Y };
+}
+function yGrid(svg, sc, W, m, fmtV) {
+  for (let v = sc.lo; v <= sc.hi + 1e-9; v += sc.step) {
+    el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(v), y2: sc.Y(v), class: Math.abs(v) < 1e-9 ? "zero" : "grid" }, svg);
+    label(svg, m.l - 8, sc.Y(v) + 4, fmtV(v), { class: "axis", "text-anchor": "end" });
+  }
+}
+
+function lineChart(box, { xs, series, ref, band, xStep }) {
+  box.innerHTML = "";
+  const W = 960, H = 330, m = { l: 62, r: 16, t: 24, b: 34 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
+  const x0 = xs[0], x1 = xs[xs.length - 1];
+  const X = (a) => m.l + ((a - x0) / Math.max(1, x1 - x0)) * (W - m.l - m.r);
+  const all = series.flatMap((s) => s.values).concat(ref ? [ref.value] : []);
+  const sc = yScale(all, H, m);
+  if (band) {
+    el("rect", { x: X(band.from), y: m.t, width: X(band.to) - X(band.from), height: H - m.t - m.b, class: "band" }, svg);
+    label(svg, (X(band.from) + X(band.to)) / 2, m.t + 14, band.label, { class: "band-label", "text-anchor": "middle" });
+  }
+  yGrid(svg, sc, W, m, (v) => `${Math.round(v)} 万`);
+  for (const a of xs) if ((a - x0) % xStep === 0) label(svg, X(a), H - m.b + 20, a, { class: "axis", "text-anchor": "middle" });
+  if (ref) {
+    el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref" }, svg);
+    label(svg, m.l + 8, sc.Y(ref.value) - 7, ref.label, { class: "ref-label" });
+  }
+  for (const s of series.slice().reverse()) {
+    const d = s.values.map((v, i) => `${i ? "L" : "M"}${X(xs[i]).toFixed(1)},${sc.Y(v).toFixed(1)}`).join("");
+    el("path", { d, class: "line", stroke: s.color }, svg);
+  }
+  const guide = el("line", { y1: m.t, y2: H - m.b, class: "guide", visibility: "hidden" }, svg);
+  const dots = series.map((s) => el("circle", { r: 4.5, fill: s.color, visibility: "hidden" }, svg));
+  const hit = el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, class: "hit" }, svg);
+  const tip = makeTip(box);
+  hit.addEventListener("mousemove", (evt) => {
+    const r = svg.getBoundingClientRect();
+    const sx = ((evt.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(xs.length - 1, Math.round(((sx - m.l) / (W - m.l - m.r)) * (x1 - x0))));
+    guide.setAttribute("visibility", "visible");
+    guide.setAttribute("x1", X(xs[i]));
+    guide.setAttribute("x2", X(xs[i]));
+    dots.forEach((d, k) => {
+      d.setAttribute("visibility", "visible");
+      d.setAttribute("cx", X(xs[i]));
+      d.setAttribute("cy", sc.Y(series[k].values[i]));
+    });
+    tip.show(`<b>你 ${xs[i]} 岁（${thisYear + xs[i] - x0} 年初）</b>` + series.map((s) => tipRow(s.color, s.name, `${s.values[i].toFixed(1)} 万`)).join(""), evt);
+  });
+  hit.addEventListener("mouseleave", () => {
+    guide.setAttribute("visibility", "hidden");
+    dots.forEach((d) => d.setAttribute("visibility", "hidden"));
+    tip.hide();
+  });
+}
+
+function groupedBars(box, { cats, series, ref }) {
+  box.innerHTML = "";
+  const W = 960, H = 300, m = { l: 62, r: 16, t: 16, b: 34 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
+  const vals = series.flatMap((s) => s.values.map((v) => Math.max(0, v))).concat(ref ? [ref.value] : []);
+  const sc = yScale(vals, H, m);
+  yGrid(svg, sc, W, m, (v) => fmt(v));
+  const gw = (W - m.l - m.r) / cats.length;
+  const bw = Math.min(40, (gw * 0.7) / series.length);
+  const tip = makeTip(box);
+  cats.forEach((c, i) => {
+    const gx = m.l + i * gw;
+    const hitRect = el("rect", { x: gx, y: m.t, width: gw, height: H - m.t - m.b, class: "bar-hit" }, svg);
+    series.forEach((s, k) => {
+      const v = Math.max(0, s.values[i]);
+      const x = gx + gw / 2 - (bw * series.length) / 2 + k * bw + 1;
+      el("rect", { x, y: sc.Y(v), width: bw - 2, height: sc.Y(0) - sc.Y(v), rx: 3, fill: s.color, "pointer-events": "none" }, svg);
+    });
+    label(svg, gx + gw / 2, H - m.b + 20, c.label, { class: "axis", "text-anchor": "middle" });
+    hitRect.addEventListener("mousemove", (evt) =>
+      tip.show(`<b>${c.title}</b>` + series.map((s) => tipRow(s.color, s.name, ceilText(s.values[i]))).join(""), evt),
+    );
+    hitRect.addEventListener("mouseleave", () => tip.hide());
+  });
+  if (ref) el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref", "pointer-events": "none" }, svg);
+}
+
+function stackedBars(box, { cats, segs, line, xStep }) {
+  box.innerHTML = "";
+  const W = 960, H = 320, m = { l: 62, r: 16, t: 16, b: 34 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
+  const totals = cats.map((_, i) => segs.reduce((s, g) => s + Math.max(0, g.values[i]), 0));
+  const sc = yScale(totals.concat(line.values), H, m);
+  yGrid(svg, sc, W, m, (v) => `${+v.toFixed(1)} 万`);
+  const gw = (W - m.l - m.r) / cats.length;
+  const bw = Math.max(2, gw * 0.66);
+  const tip = makeTip(box);
+  const pts = [];
+  cats.forEach((c, i) => {
+    const gx = m.l + i * gw;
+    const hitRect = el("rect", { x: gx, y: m.t, width: gw, height: H - m.t - m.b, class: "bar-hit" }, svg);
+    let acc = 0;
+    for (const g of segs) {
+      const v = Math.max(0, g.values[i]);
+      if (v <= 0) continue;
+      el("rect", { x: gx + (gw - bw) / 2, y: sc.Y(acc + v), width: bw, height: sc.Y(acc) - sc.Y(acc + v), fill: g.color, "pointer-events": "none" }, svg);
+      acc += v;
+    }
+    pts.push([gx + gw / 2, sc.Y(line.values[i])]);
+    if ((c - cats[0]) % xStep === 0) label(svg, gx + gw / 2, H - m.b + 20, c, { class: "axis", "text-anchor": "middle" });
+    hitRect.addEventListener("mousemove", (evt) =>
+      tip.show(
+        `<b>你 ${c} 岁（${thisYear + c - S.age} 年）</b>` +
+          segs.map((g) => (g.values[i] > 0.005 ? tipRow(g.color, g.name, `${g.values[i].toFixed(1)} 万`) : "")).join("") +
+          tipRow("", "支出合计", `${totals[i].toFixed(1)} 万`) +
+          tipRow(line.color, line.name, `${line.values[i].toFixed(1)} 万`) +
+          tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`),
+        evt,
+      ),
+    );
+    hitRect.addEventListener("mouseleave", () => tip.hide());
+  });
+  el("path", { d: pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(""), class: "line", stroke: line.color, "stroke-width": 2, "pointer-events": "none" }, svg);
+}
+
+let last = null;
+function renderResults() {
+  const box = document.getElementById("results");
+  const errs = validate(S);
+  if (errs.length) {
+    box.innerHTML = `<div class="callout danger"><h3>先改一下这些输入</h3><ul>${errs.map((e) => `<li>${e}</li>`).join("")}</ul>${
+      MODE === "quick" ? `<p class="muted" style="margin-top:6px">快速填写里没有的项（比如领养老金的年龄），在左上角“详细设置”里改。</p>` : ""
+    }</div>`;
+    last = null;
+    return;
+  }
+  const p = toParams(S);
+  const a = analyze(p);
+  const R = p.retire1;
+  const spend = S.livingWork;
+  const { a5, a10 } = riskAges(p);
+  const scen = scenarioList(p).map((sc) => {
+    const r = analyze(sc.p);
+    return { ...sc, need: r.need, have: r.have, gap: r.gap, ceil: r.ceiling, earliest: earliest(sc.p) };
+  });
+  const base = scen[0];
+  const safe = scen.find((x) => x.id === "h5out");
+  const jobAges = [];
+  for (let x = a10; x < R; x++) jobAges.push(x);
+  const lossHalf = jobAges.map((x) => analyze({ ...p, shock1: [[x, x + 1, 0], [x + 1, 999, 0.5]], shock2: [] }).ceiling);
+  const lossPerm = jobAges.map((x) => analyze({ ...p, shock1: [[x, 999, 0]], shock2: [] }).ceiling);
+  const plan = assetPath(p, a, p.livingWork);
+  const minLine = isFinite(a.ceiling) ? assetPath(p, a, a.ceiling * 12) : null;
+  const post = a.rows.slice(a.T);
+  const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
+  const ok = a.gap >= 0;
+  const maxAge = Math.min(p.endAge, 75);
+  const shocked = p.shock1.length || p.shock2.length;
+
+  let concl;
+  if (ok) {
+    concl = `<div class="callout success"><h3>按现在的设定，${R} 岁能退</h3>
+      <p>${R} 岁时需要约 <b>${wan(a.need)}</b>；工作期间每月花 ${fmt(spend)}（不含房贷和孩子），${R} 岁约有 <b>${wan(a.have)}</b>，多出 ${wan(a.gap)}。</p>
+      <p>${shocked ? "按你填的职业风险，" : "一切照计划的话，"}工作期间每月最多能花 ${ceilText(a.ceiling)}。${
+        safe ? `如果你 ${a5} 岁后再也找不到工作，上限是 ${ceilText(safe.ceil)}。` : ""
+      }</p>
+      ${
+        safe
+          ? safe.ceil >= spend
+            ? `<p>按现在的开销，连“${a5} 岁后再也找不到工作”也扛得住。</p>`
+            : floor100(safe.ceil) >= 1000
+              ? `<p><b>想把这种情况也扛住，工作期间每月开销要控制在 ${fmt(Math.floor(safe.ceil / 500) * 500)} 以内。</b></p>`
+              : `<p>“${a5} 岁后再也找不到工作”光靠省钱扛不住，要靠晚退或退休后的其他收入。</p>`
+          : ""
+      }</div>`;
+  } else {
+    concl = `<div class="callout danger"><h3>按现在的设定，${R} 岁退休还差 ${wan(-a.gap)}</h3>
+      <p>${R} 岁时需要约 <b>${wan(a.need)}</b>，按每月花 ${fmt(spend)}，${
+        a.have >= 0 ? `届时约有 <b>${wan(a.have)}</b>` : "不到退休存款就会花光"
+      }。</p>
+      <p>${
+        isFinite(a.ceiling) && floor100(a.ceiling) >= 1000
+          ? `要按时退，工作期间每月开销要降到 <b>${ceilText(a.ceiling)}</b> 以内。`
+          : `工作期间怎么省都不够 ${R} 岁退。`
+      }${base.earliest ? `开销不变的话，最早 <b>${base.earliest} 岁</b>能退。` : `开销不变的话，${maxAge} 岁前都退不了。`}</p></div>`;
+  }
+
+  const r0 = a.rows[0];
+  const nowIn = [
+    ["两人到手工资", r0.salary / 12],
+    ["年终奖（按月摊）", r0.bonus / 12],
+    ["公积金冲抵房贷", r0.hf / 12],
+    ["其他收入", r0.other / 12],
+  ].filter(([, v]) => v > 0.5);
+  const nowOut = [
+    ["家庭日常开销", a.T > 0 ? spend : S.livingRetire],
+    ["房贷月供", p.mortYears > 0 ? S.mortMonthly : 0],
+    ["孩子", (r0.child - r0.childBirth) / 12],
+    ["自己交的社保医保", (r0.med + r0.si) / 12],
+  ].filter(([, v]) => v > 0.5);
+  const inSum = nowIn.reduce((s, [, v]) => s + v, 0), outSum = nowOut.reduce((s, [, v]) => s + v, 0);
+  const oneNow = S.oneOffs.filter((o) => o.age === S.age);
+  const kids = (S.hasKids ? S.children : []).filter((c) => c.birthAge > S.age).map((c) => c.birthAge).sort((x, y) => x - y);
+
+  const pensionMonthly = (a.sim.pen1 + a.sim.pen2) / 12;
+  const pensionShort = S.livingRetire - pensionMonthly;
+  const pensionCheck = !p.covered
+    ? ""
+    : pensionShort <= 0
+      ? `<p class="muted" style="margin:6px 0 0">${p.sp ? "两人合计" : "合计"}每月约 ${fmt(pensionMonthly)}，够退休后每月 ${fmt(S.livingRetire)} 的生活费。</p>`
+      : `<p style="margin:8px 0 0;font-size:13px;color:var(--warn)">${p.sp ? "两人合计" : "合计"}每月约 ${fmt(pensionMonthly)}，比退休后每月 ${fmt(S.livingRetire)} 的生活费少约 ${fmt(pensionShort)}。领养老金时留下的 ${wan(p.floor)}能补这个差约 ${Math.floor(p.floor / (pensionShort * 12))} 年；觉得不够，可以把备用金调高，或者把“领养老金以后”改成按实际养老金算。</p>`;
+  const pensionBox = `
+    <div class="kv">
+      <span class="k">你：${p.pAge1} 岁起，${formula(S) ? `共交约 ${a.sim.y1} 年` : "直接填写"}</span><span class="v">每月约 ${fmt(a.sim.pen1 / 12)} 元</span>
+      ${p.sp ? `<span class="k">配偶：${p.pAge2} 岁起，${formula(S) ? `共交约 ${a.sim.y2} 年` : "直接填写"}</span><span class="v">每月约 ${fmt(a.sim.pen2 / 12)} 元</span>` : ""}
+    </div>
+    <p class="muted" style="margin:8px 0 0">${
+      formula(S)
+        ? `按公式估算：上班的年份都算缴费年限；停工后${S.siAfter === "continue" ? "自己接着交到领养老金" : "停交，不够最低年限的补够"}。退休越早，交的年数越少，养老金也越少。没算工资上涨和账户利息，偏保守。`
+        : "按你直接填的金额。"
+    }</p>${pensionCheck}`;
+
+  const tLiving = sum(post, (r) => r.living), tChild = sum(post, (r) => r.child), tMort = sum(post, (r) => r.mort);
+  const tSi = sum(post, (r) => r.med + r.si), tOne = sum(post, (r) => r.one);
+  const tPension = sum(post, (r) => r.pension), tOther = sum(post, (r) => r.other), tWork = sum(post, (r) => r.salary + r.bonus + r.hf);
+  const direct = tLiving + tChild + tMort + tSi + tOne - tPension - tOther - tWork + p.floor;
+
+  const step = R - S.age > 12 ? 2 : 1;
+  const cps = [];
+  for (let x = S.age + 1; x <= R; x++) if ((x - S.age) % step === 0 || x === R) cps.push(x);
+  const planAt = new Map(plan.map((r) => [r.age, r.assets]));
+  const minAt = minLine ? new Map(minLine.map((r) => [r.age, r.assets])) : null;
+
+  const toneOf = (g) => (g >= 2e5 ? "t-success" : g >= 0 ? "t-warn" : "t-danger");
+  const stressRows = (job) =>
+    scen
+      .filter((x) => x.job === job)
+      .map((x) => `<tr class="${toneOf(x.gap)}"><td>${x.name}</td><td class="num">${ceilText(x.ceil)}</td><td class="num">${signedWan(x.gap)}</td><td class="num">${x.earliest ? x.earliest + " 岁" : maxAge + " 岁后"}</td></tr>`)
+      .join("");
+
+  box.innerHTML = `
+  <div class="stats">
+    <div class="stat"><div class="v">${wan(a.need)}</div><div class="l">${R} 岁时需要的存款</div></div>
+    <div class="stat"><div class="v">${wan(a.have)}</div><div class="l">每月花 ${fmt(spend)}，${R} 岁会有</div></div>
+    <div class="stat ${ok ? "good" : "bad"}"><div class="v">${signedWan(a.gap)}</div><div class="l">${ok ? "安全垫" : "缺口"}</div></div>
+    <div class="stat"><div class="v">${isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? fmt(floor100(a.ceiling)) : "—"}</div><div class="l">工作期间每月最多能花（元）</div></div>
+    <div class="stat"><div class="v">${base.earliest ? base.earliest + " 岁" : "—"}</div><div class="l">按现在的开销，最早几岁能退</div></div>
+  </div>
+  ${concl}
+  <p class="muted">${
+    p.covered
+      ? `按“养老金够日常生活”算：存款只需撑到你 ${p.lastPension} 岁${p.sp ? "（两人都开始领养老金）" : "（开始领养老金）"}，那时还剩 ${wan(p.floor)}备用金。`
+      : `存款按实际养老金一直算到你 ${p.endAge} 岁。`
+  }“每月花”指工作期间家庭日常开销，不含房贷和孩子；存款数字已经扣掉了房贷、孩子和一次性支出。${R} 岁需要的 ${wan(a.need)}，按每年 ${S.infl}% 通胀相当于当年的约 ${wan(a.need * Math.pow(1 + p.infl, R - S.age))}。</p>
+
+  <section>
+    <h2>现在每月的钱</h2>
+    <div class="grid2">
+      <div class="card">
+        <div class="kv">
+          ${nowIn.map(([k, v]) => `<span class="k">${k}</span><span class="v">${fmt(v)}</span>`).join("")}
+          <span class="sep"></span>
+          ${nowOut.map(([k, v]) => `<span class="k">减：${k}</span><span class="v">−${fmt(v)}</span>`).join("")}
+          <span class="sep"></span>
+          <span class="k total">每月能存</span><span class="v total">${fmt(inSum - outSum)}</span>
+        </div>
+        <p class="muted" style="margin:8px 0 0">今年的情况，单位元。${oneNow.length ? `今年还有一次性支出：${oneNow.map((o) => `${esc(o.name)} ${o.amount} 万`).join("、")}。` : ""}${kids.length ? `孩子出生后（你 ${kids.join("、")} 岁）每月会多出孩子的花费。` : ""}</p>
+      </div>
+      <div class="card">
+        <h3>养老金估算（今天的钱）</h3>
+        ${pensionBox}
+      </div>
+    </div>
+  </section>
+
+  ${
+    jobAges.length
+      ? `<section>
+    <h2>工作风险：失业越早，能花的越少</h2>
+    <p>下图是你在不同年龄失业时，工作期间每月最多能花多少${p.sp ? "（配偶照常上班）" : ""}。柱子高过虚线，说明按每月 ${fmt(spend)} 花，那种情况下 ${R} 岁仍然够。</p>
+    <div class="card">
+      <div class="legend">
+        <span><i style="background:var(--info)"></i>失业 1 年后，找到收入减半的工作</span>
+        <span><i style="background:var(--warn)"></i>之后再也找不到工作</span>
+        <span><i class="dash"></i>现在设定的每月 ${fmt(spend)}</span>
+      </div>
+      <div class="chart-box" id="chart-job"></div>
+      <p class="muted" style="margin:6px 0 0">横轴：你失业时的年龄；纵轴：工作期间每月开销上限（元）。失业期间自己交医保，不算失业保险金。</p>
+    </div>
+  </section>`
+      : ""
+  }
+
+  <section>
+    <h2>压力测试</h2>
+    <div class="card tbl">
+      <table>
+        <thead><tr><th>情况</th><th class="num">工作期间每月最多能花</th><th class="num">按每月 ${fmt(spend)} 花，${R} 岁差额</th><th class="num">最早可退</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="4">职业情况（只换这一项）</td></tr>${stressRows(true)}
+          <tr class="group"><td colspan="4">在当前设定上只改一项</td></tr>${stressRows(false)}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:6px"><span class="pill success">绿色</span> 多出 20 万以上 <span class="pill warn">黄色</span> 够，但余量不到 20 万 <span class="pill danger">红色</span> 不够。“当前设定”包含你在左边填的职业风险；其他职业情况会替换掉它。</p>
+  </section>
+
+  <section>
+    <h2>存款走势</h2>
+    <div class="card">
+      <div class="legend">
+        <span><i style="background:var(--info)"></i>按每月花 ${fmt(spend)}</span>
+        ${minLine ? `<span><i style="background:var(--warn)"></i>刚好够用的最低线（每月花 ${ceilText(a.ceiling)}）</span>` : ""}
+        <span><i class="dash"></i>${R} 岁需要 ${wan(a.need)}</span>
+      </div>
+      <div class="chart-box" id="chart-path"></div>
+      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：年初的存款（万元，今天的购买力）。阴影部分是退休以后。</p>
+    </div>
+    <h3 style="margin-top:16px">每年对账的检查点</h3>
+    <div class="card tbl">
+      <table>
+        <thead><tr><th>年初</th>${minAt ? '<th class="num">最低线</th>' : ""}<th class="num">按每月花 ${fmt(spend)}</th><th class="num">换算成当年的钱</th></tr></thead>
+        <tbody>${cps
+          .map((x) => `<tr class="${x === R ? "strong" : ""}"><td>${x} 岁（${thisYear + x - S.age} 年）</td>${minAt ? `<td class="num">${wan(minAt.get(x))}</td>` : ""}<td class="num">${wan(planAt.get(x))}</td><td class="num">${wan(planAt.get(x) * Math.pow(1 + p.infl, x - S.age))}</td></tr>`)
+          .join("")}</tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:6px">账户里看到的是当年的钱，和最后一列比。连续两年低于最低线（同样换算成当年的钱），就要减少开销或推迟退休。</p>
+  </section>
+
+  <section>
+    <h2>退休后每年的收支</h2>
+    <div class="card">
+      <div class="legend">
+        <span><i style="background:var(--seg-living)"></i>生活费</span>
+        <span><i style="background:var(--seg-child)"></i>孩子</span>
+        <span><i style="background:var(--seg-mort)"></i>房贷</span>
+        <span><i style="background:var(--seg-si)"></i>社保医保</span>
+        <span><i style="background:var(--seg-one)"></i>一次性支出</span>
+        <span><i class="ln"></i>收入（养老金、其他收入${p.sp && !p.together ? "、配偶工资" : ""}）</span>
+      </div>
+      <div class="chart-box" id="chart-post"></div>
+      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：当年金额（万元，今天的购买力）。柱子高出线的部分要从存款里拿。房贷合同金额固定，按通胀折成今天的钱会越来越少。</p>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card">
+        <h3>${wan(a.need)} 是怎么来的（${R}–${p.endAge} 岁合计）</h3>
+        <div class="kv">
+          <span class="k">生活费</span><span class="v">${wan(tLiving)}</span>
+          ${tChild > 0 ? `<span class="k">孩子</span><span class="v">${wan(tChild)}</span>` : ""}
+          ${tMort > 0 ? `<span class="k">剩下的房贷</span><span class="v">${wan(tMort)}</span>` : ""}
+          ${tSi > 0 ? `<span class="k">自己交的社保医保</span><span class="v">${wan(tSi)}</span>` : ""}
+          ${tOne > 0 ? `<span class="k">一次性支出</span><span class="v">${wan(tOne)}</span>` : ""}
+          ${tPension > 0 ? `<span class="k">减：养老金</span><span class="v">−${wan(tPension)}</span>` : ""}
+          ${tOther > 0 ? `<span class="k">减：其他收入</span><span class="v">−${wan(tOther)}</span>` : ""}
+          ${tWork > 0 ? `<span class="k">减：配偶继续上班的收入</span><span class="v">−${wan(tWork)}</span>` : ""}
+          <span class="k">${p.covered ? `${p.lastPension} 岁领养老金时还要剩下` : "最后还要剩下"}</span><span class="v">${wan(p.floor)}</span>
+          <span class="sep"></span>
+          <span class="k">直接加总</span><span class="v">${wan(direct)}</span>
+          <span class="k total">实际需要（没花的钱每年还有收益）</span><span class="v total">${wan(a.need)}</span>
+        </div>
+        <p class="muted" style="margin:8px 0 0">实际需要的钱，是保证退休后每年存款都不低于 ${wan(p.floor)}的最少金额。${p.covered ? `${p.lastPension} 岁以后按养老金够日常生活，不再算。` : ""}</p>
+      </div>
+      <div class="card">
+        <h3>这个计算没有考虑</h3>
+        <ul style="margin:0;padding-left:18px" class="muted">
+          <li>房子的价格涨跌，以及卖房的钱</li>
+          <li>老家的房子、土地等不能直接花的资产</li>
+          <li>失业保险金、遗产、父母给的钱</li>
+          <li>老年以后的大病、护理费用（可以加在一次性支出里）</li>
+          <li>政策变化：延迟退休、养老金调整、医保缴费年限</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <details class="more">
+      <summary>查看逐年明细</summary>
+      <div class="card tbl">
+        <table>
+          <thead><tr><th>你${p.sp ? "／配偶" : ""}</th><th>年份</th><th class="num">工资等</th><th class="num">养老金等</th><th class="num">生活费</th><th class="num">房贷</th><th class="num">孩子</th><th class="num">社保医保</th><th class="num">一次性</th><th class="num">净额</th><th class="num">年初存款</th></tr></thead>
+          <tbody>${a.rows
+            .map((r, i) => {
+              const living = r.working ? p.livingWork : r.living;
+              const net = r.net - (r.working ? p.livingWork : 0);
+              return `<tr class="${i === a.T ? "retire" : ""}"><td>${r.a1}${p.sp ? "／" + r.a2 : ""}</td><td>${thisYear + r.t}</td><td class="num">${w1(r.salary + r.bonus + r.hf)}</td><td class="num">${w1(r.pension + r.other)}</td><td class="num">${w1(living)}</td><td class="num">${w1(r.mort)}</td><td class="num">${w1(r.child)}</td><td class="num">${w1(r.med + r.si)}</td><td class="num">${w1(r.one)}</td><td class="num">${w1(net)}</td><td class="num">${w1(plan[i].assets)}</td></tr>`;
+            })
+            .join("")}</tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:6px">单位万元，今天的购买力；蓝线那一行是退休第一年。</p>
+    </details>
+  </section>
+
+  <section class="muted" style="line-height:1.8">
+    计算方法：按年计算，收支按年中发生，所有金额按今天的购买力，投资收益为扣除通胀后的实际收益。工作期间收入 = 工资 + 年终奖 + 公积金冲抵（失业、降薪时按比例减少）；退休后收入 = 养老金 + 其他收入。
+    房贷合同月供固定，按通胀折算。失业的年份和停工后到领养老金之前，自己交医保。
+    养老金公式：基础养老金 =（计发基数 + 本人平均缴费水平）÷ 2 × 缴费年数 × 1%；个人账户养老金 = 账户累计 ÷ 计发月数（55 岁 170、58 岁 152、60 岁 139、63 岁 117 等，按国家计发月数表）。
+    “需要的存款”是保证退休后每年存款都不低于备用金的最少金额：默认只算到两人都开始领养老金，之后按养老金够日常生活；也可以改成按实际养老金一直算到指定年龄。“每月最多能花”是让退休那年存款刚好等于这个数的工作期间开销。这是规划测算，不是对收益的承诺。
+  </section>`;
+
+  last = { p, a, plan, minLine, jobAges, lossHalf, lossPerm, post };
+  drawCharts();
+}
+
+function drawCharts() {
+  if (!last) return;
+  const { p, a, plan, minLine, jobAges, lossHalf, lossPerm, post } = last;
+  const R = p.retire1;
+  const span = p.endAge + 1 - p.age;
+  const xs = plan.map((r) => r.age);
+  const series = [{ name: `按每月花 ${fmt(S.livingWork)}`, color: css("--info"), values: plan.map((r) => r.assets / 1e4) }];
+  if (minLine) series.push({ name: "最低线", color: css("--warn"), values: minLine.map((r) => r.assets / 1e4) });
+  lineChart(document.getElementById("chart-path"), {
+    xs, series,
+    ref: { value: a.need / 1e4, label: `${R} 岁需要 ${wan(a.need)}` },
+    band: { from: R, to: xs[xs.length - 1], label: "退休后" },
+    xStep: span > 40 ? 5 : span > 20 ? 2 : 1,
+  });
+  const jobBox = document.getElementById("chart-job");
+  if (jobBox) {
+    groupedBars(jobBox, {
+      cats: jobAges.map((x) => ({ label: `${x} 岁`, title: `你 ${x} 岁失业` })),
+      series: [
+        { name: "1 年后收入减半", color: css("--info"), values: lossHalf.map((v) => (isFinite(v) ? floor100(v) : 0)) },
+        { name: "再也找不到工作", color: css("--warn"), values: lossPerm.map((v) => (isFinite(v) ? floor100(v) : 0)) },
+      ],
+      ref: { value: S.livingWork },
+    });
+  }
+  const cats = post.map((r) => r.a1);
+  stackedBars(document.getElementById("chart-post"), {
+    cats,
+    segs: [
+      { name: "生活费", color: css("--seg-living"), values: post.map((r) => r.living / 1e4) },
+      { name: "孩子", color: css("--seg-child"), values: post.map((r) => r.child / 1e4) },
+      { name: "房贷", color: css("--seg-mort"), values: post.map((r) => r.mort / 1e4) },
+      { name: "社保医保", color: css("--seg-si"), values: post.map((r) => (r.med + r.si) / 1e4) },
+      { name: "一次性支出", color: css("--seg-one"), values: post.map((r) => r.one / 1e4) },
+    ],
+    line: { name: "收入", color: css("--income"), values: post.map((r) => (r.pension + r.other + r.salary + r.bonus + r.hf) / 1e4) },
+    xStep: cats.length > 30 ? 5 : cats.length > 15 ? 2 : 1,
+  });
+}
+
+syncProfile();
+renderForm();
+renderResults();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCharts);
+</script>
+</body>
+</html>
