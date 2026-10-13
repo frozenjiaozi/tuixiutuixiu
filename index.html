@@ -1205,7 +1205,7 @@ const DEFAULTS = {
   hasSpouse: true,
   spouse: { birth: "1997-06-20", gender: "female55" },
   assets: 5,
-  stopMe: "2044-03", together: true, stopSpouse: "2044-03",
+  stopAgeMe: 47, stopMe: "2044-03", together: true, stopAgeSpouse: 47, stopSpouse: "2044-06",
   inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, outlook: "stable", upRate: 3, downRate: 3, cutAge: 35, cutPct: 50,
   hasMortgage: true, mortMonthly: 2500, mortEnd: "2046-09", hfOffset: 1000,
   debts: [],
@@ -1554,7 +1554,18 @@ function sanitize(raw) {
     ["ret", "eduGrowth"].forEach(nominal);
   }
   s.rates = "nominal";
+  for (const [ageKey, dateKey, who] of [["stopAgeMe", "stopMe", "me"], ["stopAgeSpouse", "stopSpouse", "spouse"]]) {
+    const b = ym(s[who].birth), d = ym(raw[dateKey]);
+    if (!isNum(raw[ageKey]) && isFinite(b) && isFinite(d)) s[ageKey] = Math.round((d - b) / 12);
+  }
+  syncStops(s);
   return s;
+}
+
+function syncStops(s) {
+  const b1 = ym(s.me.birth), b2 = ym(s.spouse.birth);
+  if (isFinite(b1)) s.stopMe = ymStr(b1 + s.stopAgeMe * 12);
+  if (isFinite(b2)) s.stopSpouse = ymStr(b2 + s.stopAgeSpouse * 12);
 }
 
 function load() {
@@ -1566,6 +1577,7 @@ function load() {
 }
 let S = load();
 function save() {
+  syncStops(S);
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
 }
 
@@ -1681,20 +1693,37 @@ function bodyBasic() {
     if (s1 <= NOW) return derived("提前退休的时间要晚于这个月。", true);
     if (s1 > st1.date) return derived(`已经晚于你的法定退休时间（${fmtYM(st1.date)}），请往前选。`, true);
     if (s1 === st1.date) return derived("这就是你的法定退休时间，不算提前退休。", true);
-    return derived(`那时你 <b>${ageTxt(s1 - b1)}</b>，比法定退休早 <b>${durTxt(st1.date - s1)}</b>，这段时间要靠存款过。`);
+    return derived(`按满 ${S.stopAgeMe} 岁生日那个月算，是 <b>${fmtYM(s1)}</b>，比法定退休早 <b>${durTxt(st1.date - s1)}</b>，这段时间要靠存款过。`);
   };
   const spouseInfo = () => {
     const b2 = birthOf("spouse"), st2 = statOf("spouse"), s2 = ym(S.stopSpouse);
     if (!st2 || !isFinite(s2)) return "";
     if (s2 > st2.date) return derived(`已经晚于伴侣的法定退休时间（${fmtYM(st2.date)}），请往前选。`, true);
     if (s2 <= NOW) return derived("伴侣从现在起就不上班。");
-    return derived(`那时伴侣 <b>${ageTxt(s2 - b2)}</b>，比法定退休早 <b>${durTxt(st2.date - s2)}</b>。`);
+    return derived(`按伴侣满 ${S.stopAgeSpouse} 岁生日那个月算，是 <b>${fmtYM(s2)}</b>，比法定退休早 <b>${durTxt(st2.date - s2)}</b>。`);
+  };
+  const ageSelect = (key, label, ageKey, allowNow, hint) => () => {
+    const b = birthOf(key), st = statOf(key);
+    if (!st || NOW - b < 0) return "";
+    const cur = Math.floor((NOW - b) / 12), top = Math.floor((st.date - 1 - b) / 12);
+    const ages = [];
+    for (let a = allowNow ? cur : cur + (b + cur * 12 > NOW ? 0 : 1); a <= Math.max(top, cur); a++) ages.push(a);
+    if (!ages.includes(S[ageKey])) ages.push(S[ageKey]);
+    ages.sort((x, y) => x - y);
+    const opts = ages
+      .map((a) => {
+        const d = b + a * 12;
+        const text = d <= NOW ? "现在就不上班" : `${a} 岁（${fmtYM(d)}）`;
+        return `<option value="${a}" ${a === S[ageKey] ? "selected" : ""}>${text}</option>`;
+      })
+      .join("");
+    return `<div class="field"><label>${label}</label><select data-path="${ageKey}" data-kind="nsel">${opts}</select>${hintHTML(hint)}</div>`;
   };
   let spouseStop = "";
   if (sp) {
     spouseStop = toggle("together", "伴侣和你同一个月提前退休");
     if (!S.together) {
-      spouseStop += ymField("stopSpouse", "伴侣计划哪个月提前退休", thisYear, thisYear + 50, "伴侣现在没有工作的话，选这个月就行") + live("stop-spouse", spouseInfo);
+      spouseStop += live("age-spouse", ageSelect("spouse", "伴侣计划多少岁提前退休", "stopAgeSpouse", true, "伴侣现在没有工作的话，选“现在就不上班”")) + live("stop-spouse", spouseInfo);
     }
   }
   return `<div class="field"><label>婚姻状况</label><div class="seg-sm seg-full" role="group" aria-label="婚姻状况">
@@ -1704,7 +1733,7 @@ function bodyBasic() {
     ${personHTML("me", "你")}
     ${sp ? personHTML("spouse", "伴侣") : ""}
     <div class="sub-title">计划什么时候提前退休</div>
-    ${ymField("stopMe", "你计划哪个月提前退休", thisYear, thisYear + 50)}
+    ${live("age-me", ageSelect("me", "你计划多少岁提前退休", "stopAgeMe", false))}
     ${live("stop-me", stopInfo)}
     ${spouseStop}
     <div class="sub-title">存款和收益</div>
@@ -1910,7 +1939,7 @@ const CATS = [
       if (!isFinite(b1)) return "先填出生日期";
       const parts = [`你 ${Math.floor((NOW - b1) / 12)} 岁`];
       if (S.hasSpouse && isFinite(birthOf("spouse"))) parts.push(`伴侣 ${Math.floor((NOW - birthOf("spouse")) / 12)} 岁`);
-      if (isFinite(s1)) parts.push(`${shortYM(s1)} 提前退休`);
+      if (isFinite(s1)) parts.push(`${S.stopAgeMe} 岁（${shortYM(s1)}）提前退休`);
       parts.push(`存款 ${S.assets} 万（年利率 ${S.ret}%）`);
       return parts.join(" · ");
     },
@@ -2028,8 +2057,8 @@ formEl.addEventListener("change", (e) => {
     softUpdate();
     return;
   }
-  if (kind !== "bool" && kind !== "select") return;
-  setPath(S, path, kind === "bool" ? el.checked : el.value);
+  if (kind !== "bool" && kind !== "select" && kind !== "nsel") return;
+  setPath(S, path, kind === "bool" ? el.checked : kind === "nsel" ? Number(el.value) : el.value);
   if (path === "hasKids" && S.hasKids && !S.children.length) S.children.push(newChild());
   if (path === "hasMortgage" && S.hasMortgage && !(ym(S.mortEnd) >= NOW)) S.mortEnd = ymStr(NOW + 239);
   save();
