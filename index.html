@@ -659,38 +659,22 @@
   svg line.grid { stroke: #f1f5f9; stroke-width: 1; }
   svg line.zero { stroke: #cbd5e1; stroke-width: 1; }
   svg line.ref { stroke: #94a3b8; stroke-dasharray: 4 4; stroke-width: 1.5; }
-  svg rect.band { fill: rgba(16, 185, 129, 0.08); }
-  svg path.area { fill: rgba(16, 185, 129, 0.15); }
-  svg path.line-plan { stroke: #059669; stroke-width: 3; fill: none; }
-  svg path.line-min { stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 4 3; fill: none; }
   svg rect.bar-hit { fill: transparent; cursor: pointer; }
   svg rect.bar-hit:hover { fill: rgba(15, 23, 42, 0.04); }
 
-  /* 检查点矩阵 */
-  .ck-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 10px;
-    margin-top: 16px;
-  }
-  .ck-card {
-    border-radius: 18px;
-    padding: 14px;
-    background: #f8fafc;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .ck-card.retire {
-    background: var(--brand);
-    color: #ffffff;
-  }
-  .ck-date { font-size: 11.5px; font-weight: 700; color: var(--text-4); }
-  .ck-card.retire .ck-date { color: rgba(255, 255, 255, 0.85); }
-  .ck-val { font-size: 20px; font-weight: 950; font-variant-numeric: tabular-nums; }
-  .ck-card.retire .ck-val { color: #ffffff; }
-  .ck-min { font-size: 11px; font-weight: 600; color: var(--text-4); }
-  .ck-card.retire .ck-min { color: rgba(255, 255, 255, 0.75); }
+  /* 图例 */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 12px; font-size: 12px; font-weight: 700; color: var(--text-3); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+  .legend i.ln { width: 16px; height: 0; border-radius: 0; border-top: 2.5px solid #0f172a; }
+  .legend i.ln.bal { border-top-color: #2563eb; }
+
+  /* 金额构成清单 */
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: baseline; font-size: 13px; }
+  .kv .k { color: var(--text-2); font-weight: 600; }
+  .kv .v { text-align: right; color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kv .v.total { font-weight: 950; }
+  .kv .sep { grid-column: 1 / -1; height: 1px; margin: 4px 0; background: #e2e8f0; }
 
   /* 压力测试与明细表格 */
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -1073,11 +1057,6 @@
       font-size: 10px;
       margin: 2px 0 0;
       line-height: 1.2;
-    }
-
-    .ck-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
     }
 
     /* 移动端弹窗深度适配 (解决移动端分栏挤扁痛点) */
@@ -1849,49 +1828,6 @@ function yGrid(svg, sc, W, m, fmtV) {
   }
 }
 
-function lineChart(box, { xs, series, ref, band, xStep, titles }) {
-  box.innerHTML = "";
-  const W = 960, H = 320, m = { l: 60, r: 16, t: 20, b: 34 };
-  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
-  const allVals = series.flatMap((s) => s.values).concat(ref ? [ref.value] : []);
-  const sc = yScale(allVals, H, m);
-  yGrid(svg, sc, W, m, (v) => `${Math.round(v)} 万`);
-  const X = (x) => m.l + ((x - xs[0]) / (xs[xs.length - 1] - xs[0])) * (W - m.l - m.r);
-  if (band) {
-    const x1 = Math.max(m.l, X(band.from)), x2 = Math.min(W - m.r, X(band.to));
-    el("rect", { x: x1, y: m.t, width: x2 - x1, height: H - m.t - m.b, class: "band" }, svg);
-    label(svg, (x1 + x2) / 2, m.t + 16, band.label, { class: "axis", "text-anchor": "middle", fill: "#059669", "font-weight": "700" });
-    el("line", { x1, x2: x1, y1: m.t, y2: H - m.b, stroke: "#059669", "stroke-width": 1.5, "stroke-dasharray": "3 3" }, svg);
-  }
-  for (let i = 0; i < xs.length; i++) {
-    const x = xs[i];
-    if ((x - xs[0]) % xStep === 0) label(svg, X(x), H - m.b + 20, x, { class: "axis", "text-anchor": "middle" });
-  }
-  if (ref) {
-    el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref" }, svg);
-    label(svg, m.l + 8, sc.Y(ref.value) - 6, ref.label, { class: "axis", fill: "#64748b", "font-weight": "700" });
-  }
-  series.forEach((s) => {
-    const pts = s.values.map((v, i) => [X(xs[i]), sc.Y(v)]);
-    if (s.name.includes("按每月花")) {
-      const areaPts = pts.concat([[X(xs[xs.length - 1]), sc.Y(0)], [X(xs[0]), sc.Y(0)]]);
-      el("path", { d: areaPts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("") + "Z", class: "area" }, svg);
-    }
-    el("path", { d: pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(""), class: s.name.includes("最低线") ? "line-min" : "line-plan" }, svg);
-  });
-  const tip = makeTip(box);
-  const overlay = el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent", cursor: "crosshair" }, svg);
-  overlay.addEventListener("mousemove", (evt) => {
-    const rect = box.getBoundingClientRect();
-    const curX = ((evt.clientX - rect.left) / rect.width) * W;
-    const curAge = xs[0] + ((curX - m.l) / (W - m.l - m.r)) * (xs[xs.length - 1] - xs[0]);
-    let best = 0;
-    for (let i = 0; i < xs.length; i++) if (Math.abs(xs[i] - curAge) < Math.abs(xs[best] - curAge)) best = i;
-    tip.show(`<b>${titles[best]}</b>` + series.map((s) => tipRow(s.color, s.name, `${s.values[best].toFixed(1)} 万`)).join(""), evt);
-  });
-  overlay.addEventListener("mouseleave", () => tip.hide());
-}
-
 function groupedBars(box, { cats, series, ref }) {
   box.innerHTML = "";
   const W = 960, H = 280, m = { l: 60, r: 16, t: 16, b: 34 };
@@ -1918,15 +1854,20 @@ function groupedBars(box, { cats, series, ref }) {
   if (ref) el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref", "pointer-events": "none" }, svg);
 }
 
-function stackedBars(box, { cats, segs, line, parts = [], xStep, titles, save }) {
+function stackedBars(box, { cats, segs, line, parts = [], balance, xStep, titles, save }) {
   box.innerHTML = "";
-  const W = 960, H = 300, m = { l: 60, r: 16, t: 16, b: 34 };
+  const W = 960, H = 300, m = { l: 60, r: balance ? 64 : 16, t: 16, b: 34 };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
   const totals = cats.map((_, i) => segs.reduce((s, g) => s + Math.max(0, g.values[i]), 0));
   const sc = yScale(totals.concat(line.values), H, m);
   yGrid(svg, sc, W, m, (v) => `${+v.toFixed(1)} 万`);
+  const sb = balance ? yScale(balance.values, H, m) : null;
+  if (sb) {
+    for (let v = sb.lo; v <= sb.hi + 1e-9; v += sb.step) label(svg, W - m.r + 8, sb.Y(v) + 4, `${Math.round(v)} 万`, { class: "axis", "text-anchor": "start", fill: balance.color });
+  }
   const gw = (W - m.l - m.r) / cats.length;
   const bw = Math.max(3, gw * 0.64);
+  const bPts = [];
   const tip = makeTip(box);
   const pts = [];
   cats.forEach((c, i) => {
@@ -1940,6 +1881,7 @@ function stackedBars(box, { cats, segs, line, parts = [], xStep, titles, save })
       acc += v;
     }
     pts.push([gx + gw / 2, sc.Y(line.values[i])]);
+    if (sb) bPts.push([gx + gw / 2, sb.Y(balance.values[i])]);
     if ((c - cats[0]) % xStep === 0) label(svg, gx + gw / 2, H - m.b + 20, c, { class: "axis", "text-anchor": "middle" });
     hitRect.addEventListener("mousemove", (evt) =>
       tip.show(
@@ -1950,12 +1892,17 @@ function stackedBars(box, { cats, segs, line, parts = [], xStep, titles, save })
           tipRow(line.color, line.name, `${line.values[i].toFixed(1)} 万`) +
           (save
             ? tipRow("", "<b>当年存款增加</b>", `<b>${(line.values[i] - totals[i]).toFixed(1)} 万</b>`)
-            : tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`)),
+            : tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`)) +
+          (balance ? tipRow(balance.color, balance.name, `${balance.values[i].toFixed(1)} 万`) : ""),
         evt
       ));
     hitRect.addEventListener("mouseleave", () => tip.hide());
   });
   el("path", { d: pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(""), stroke: line.color, "stroke-width": 2.5, fill: "none", "pointer-events": "none" }, svg);
+  if (sb) {
+    el("path", { d: bPts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(""), stroke: balance.color, "stroke-width": 2.5, fill: "none", "pointer-events": "none" }, svg);
+    for (const [x, y] of bPts) el("circle", { cx: x, cy: y, r: 3, fill: "#fff", stroke: balance.color, "stroke-width": 1.5, "pointer-events": "none" }, svg);
+  }
 }
 
 // ==================== 3. 页面渲染与交互逻辑 ====================
@@ -2158,7 +2105,6 @@ function renderResults() {
   const lossHalf = jobAges.map((x) => analyze({ ...p, shock1: [[x, x + 1, 0], [x + 1, 999, 0.5]], shock2: [] }).ceiling);
   const lossPerm = jobAges.map((x) => analyze({ ...p, shock1: [[x, 999, 0]], shock2: [] }).ceiling);
   const plan = assetPath(p, a, p.livingWork);
-  const minLine = isFinite(a.ceiling) ? assetPath(p, a, a.ceiling) : null;
   const ok = a.gap >= 0;
   const planPct = a.need > 0 ? Math.max(0, (a.have / a.need) * 100) : 100;
   const planCeil = isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? `${fmt(floor100(a.ceiling))} 元/月` : null;
@@ -2218,16 +2164,6 @@ function renderResults() {
   // 怎么能更早退休建议
   const levers = buildLevers(S);
   const activeLever = levers.find((l) => l.id === activeLeverId);
-
-  // 资产检查点
-  const stopY = Math.floor(stopIdx / 12);
-  const stepY = stopY - THIS_YEAR > 12 ? 2 : 1;
-  const checkpoints = [];
-  for (let y = THIS_YEAR + 1; y <= stopY; y++) {
-    const t = y * 12 - NOW;
-    if (t < p.T1 && (y - THIS_YEAR) % stepY === 0) checkpoints.push(t);
-  }
-  checkpoints.push(p.T1);
 
   // 提前退休后收支 Kv
   const post = a.rows.slice(a.T);
@@ -2468,43 +2404,7 @@ function renderResults() {
       ` : ""}
     </div>
 
-    <!-- 5. 全生命周期资产走势图 -->
-    <div class="bento-card bento-section">
-      <div class="bento-header">
-        <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg></div>
-        <div>
-          <h2 class="bento-title">全生命周期资产走势</h2>
-          <p class="bento-desc">横轴：你的年龄；纵轴：存款（万元）。浅绿色区域为提前退休以后的自由岁月。</p>
-        </div>
-      </div>
-      <div class="legend">
-        <span><i style="background:#059669;"></i> 按每月花 ${fmt(spend)}</span>
-        ${minLine ? `<span><i style="background:#f59e0b;"></i> 最低警戒线（每月花 ${ceilText(a.ceiling)}）</span>` : ""}
-        <span><i style="border-top:2px dashed #94a3b8; height:0; border-radius:0; width:14px; vertical-align:3px;"></i> 提前退休时需要 ${wan(a.need)}</span>
-      </div>
-      <div class="chart-box" id="chart-path"></div>
-
-      <!-- 对账检查点矩阵 -->
-      <div style="margin-top:24px; padding-top:20px; border-top:1px solid #f1f5f9;">
-        <h4 style="margin:0 0 6px; font-size:15px; font-weight:900; color:#0f172a;">对账检查点</h4>
-        <p class="bento-desc">到了这些年龄节点，看看存款有没有低于最低线。连续两次低于，就要减少开销或适当延后退休。</p>
-        <div class="ck-grid">
-          ${checkpoints.map((t) => {
-            const isStop = t === p.T1;
-            const below = minLine ? plan[t] < minLine[t] : false;
-            return `
-              <div class="ck-card ${isStop ? "retire" : ""}">
-                <span class="ck-date">${shortYM(NOW + t)} · ${ageAt(t)} 岁${isStop ? " · 🎉 退休" : ""}</span>
-                <span class="ck-val" style="${!isStop && below ? "color:var(--rose);" : ""}">${wan(plan[t])}</span>
-                ${minLine ? `<span class="ck-min">最低线 ${wan(minLine[t])}</span>` : ""}
-              </div>
-            `;
-          }).join("")}
-        </div>
-      </div>
-    </div>
-
-    <!-- 6. 现在每月的钱与养老金 -->
+    <!-- 5. 现在每月的钱与养老金 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="m7 6 10 10"/></svg></div>
@@ -2584,7 +2484,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 7. 退休前每年的收支堆叠图 -->
+    <!-- 6. 退休前每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"/><path d="M16 10h.01"/><path d="M2 8v1a2 2 0 0 0 2 2h1"/></svg></div>
@@ -2600,9 +2500,10 @@ function renderResults() {
         <span><i style="background:#06b6d4;"></i> 社保医保</span>
         <span><i style="background:#ec4899;"></i> 大额支出</span>
         <span><i class="ln"></i> 收入（工资、年终奖${preTotals.hf > 0 ? "、公积金" : ""}${preTotals.other > 0 ? "、其他收入" : ""}、理财收益）</span>
+        <span><i class="ln bal"></i> 年末存款（右轴）</span>
       </div>
       <div class="chart-box" id="chart-pre"></div>
-      <p style="margin:10px 0 0; font-size:12px; color:var(--text-4); font-weight:600;">横轴：你的年龄；纵轴：金额（万元）。最后一根柱子不满 12 个月时按实际月数计算。</p>
+      <p style="margin:10px 0 0; font-size:12px; color:var(--text-4); font-weight:600;">横轴：你的年龄；左轴：每年收支（万元）；右轴：年末存款（万元）。最后一根柱子不满 12 个月时按实际月数计算。</p>
 
       <div style="margin-top:24px; padding-top:20px; border-top:1px solid #f1f5f9; display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
         <div style="background:#f8fafc; border-radius:24px; padding:20px;">
@@ -2640,7 +2541,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 8. 提前退休后每年的收支堆叠图 -->
+    <!-- 7. 提前退休后每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
@@ -2656,6 +2557,7 @@ function renderResults() {
         <span><i style="background:#06b6d4;"></i> 社保医保</span>
         <span><i style="background:#ec4899;"></i> 大额支出</span>
         <span><i class="ln"></i> 托底收入线</span>
+        <span><i class="ln bal"></i> 年末存款（右轴）</span>
       </div>
       <div class="chart-box" id="chart-post"></div>
 
@@ -2696,7 +2598,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 9. 工作风险分析 -->
+    <!-- 8. 工作风险分析 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
@@ -2713,7 +2615,7 @@ function renderResults() {
       <div class="chart-box" id="chart-job"></div>
     </div>
 
-    <!-- 10. 压力测试表 -->
+    <!-- 9. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
       <div style="padding:24px 28px 16px;">
         <h2 class="bento-title">压力测试</h2>
@@ -2753,7 +2655,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 11. 逐年明细折叠大表 -->
+    <!-- 10. 逐年明细折叠大表 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">查看逐年详细现金流明细</summary>
       <div style="margin-top:16px; overflow-x:auto;">
@@ -2800,7 +2702,7 @@ function renderResults() {
       </div>
     </details>
 
-    <!-- 12. 政策与算法说明折叠 -->
+    <!-- 11. 政策与算法说明折叠 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">计算方法与政策公式说明</summary>
       <div style="margin-top:16px; font-size:12.5px; color:var(--text-3); font-weight:600; line-height:1.9;">
@@ -2813,7 +2715,7 @@ function renderResults() {
   `;
 
   // 绘制 SVG 图表
-  drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm);
+  drawCharts(p, a, plan, jobAges, lossHalf, lossPerm);
 
   // 启动高精度秒级倒计时跳动
   if (targetDate) {
@@ -2877,22 +2779,8 @@ function updateCountdown(targetDate, birthMonthIdx) {
   if (pctText) pctText.textContent = `${pct.toFixed(2)}%`;
 }
 
-function drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm) {
+function drawCharts(p, a, plan, jobAges, lossHalf, lossPerm) {
   const ageAt = (t) => Math.floor((NOW + t - p.b1) / 12);
-  const ks = [];
-  for (let t = 0; t <= a.E; t += 12) ks.push(t);
-  const xs = ks.map(ageAt);
-  const series = [{ name: `按每月花 ${fmt(S.livingWork)}`, color: "#059669", values: ks.map((t) => plan[t] / 1e4) }];
-  if (minLine) series.push({ name: "最低线", color: "#f59e0b", values: ks.map((t) => minLine[t] / 1e4) });
-  const span = xs[xs.length - 1] - xs[0];
-  lineChart(document.getElementById("chart-path"), {
-    xs, series,
-    titles: ks.map((t, i) => `你 ${xs[i]} 岁（${fmtYM(NOW + t)}）`),
-    ref: { value: a.need / 1e4, label: `提前退休时需要 ${wan(a.need)}` },
-    band: { from: xs[0] + p.T1 / 12, to: xs[xs.length - 1], label: "提前退休后" },
-    xStep: span > 40 ? 5 : span > 20 ? 2 : 1,
-  });
-
   const jobBox = document.getElementById("chart-job");
   if (jobBox) {
     groupedBars(jobBox, {
@@ -2931,6 +2819,7 @@ function drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm) {
           line: { name: "收入合计", color: "#0f172a", values: work.map((v, i) => v + gain[i]) },
         };
       })(),
+      balance: { name: "年末存款", color: "#2563eb", values: starts.map((s) => plan[Math.min(s + 12, to)] / 1e4) },
       xStep: cats.length > 30 ? 5 : cats.length > 15 ? 2 : 1,
       save: opts.save,
     });
