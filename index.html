@@ -1356,6 +1356,23 @@ const minYearsAt = (dateIdx) => {
   return Math.min(20, 15 + (y - 2029) * 0.5);
 };
 
+const STAGES = ["0–2 岁（婴幼儿）", "3–5 岁（幼儿园）", "6–11 岁（小学）", "12–14 岁（初中）", "15–17 岁（高中）", "18–21 岁（大学）"];
+const STAGE_NAMES = ["婴幼儿", "幼儿园", "小学", "初中", "高中", "大学"];
+const stageIdx = (c) => (c <= 2 ? 0 : c <= 5 ? 1 : c <= 11 ? 2 : c <= 14 ? 3 : c <= 17 ? 4 : 5);
+const newChild = () => ({ born: false, date: ymStr(NOW + 12) });
+
+function kidCost(s, c, now) {
+  const b = ym(c.date);
+  if (!isFinite(b) || (!c.born && b < now)) return 0;
+  const edu = realRate(s.eduGrowth || 3, s.infl || 1);
+  let total = c.born ? 0 : (s.birthCost || 0) * 1e4;
+  for (let t = Math.max(0, b - now); t - (b - now) < CHILD_MONTHS; t++) {
+    const age = t - (b - now);
+    total += (+s.stage[stageIdx(Math.floor(age / 12))] || 0) * Math.pow(1 + edu, t / 12);
+  }
+  return total;
+}
+
 const lastPensionDate = (s) => {
   const a = statutory(ym(s.me.birth), s.me.gender);
   const b = s.hasSpouse ? statutory(ym(s.spouse.birth), s.spouse.gender) : null;
@@ -2768,13 +2785,94 @@ function renderModalContent() {
   } else if (activeModalCat === "kids") {
     box.innerHTML = `
       <div class="f-group">
-        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">孩子抚养</h4>
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">孩子抚养规划</h4>
         <div style="display:flex; gap:12px; margin-bottom:10px;">
-          <label style="display:flex; align-items:center; gap:6px; font-weight:700;"><input type="checkbox" ${S.hasKids ? "checked" : ""} onchange="updateInput('hasKids', this.checked)"> 有抚养孩子规划</label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;">
+            <input type="checkbox" ${S.hasKids ? "checked" : ""} onchange="updateKidsToggle(this.checked)">
+            有孩子，或计划要孩子
+          </label>
         </div>
+
         ${S.hasKids ? `
-          <p style="font-size:12px; color:var(--text-4); margin:0;">系统已根据儿童年龄段智能匹配费用曲线。</p>
-        ` : "<p style='font-size:12px; color:var(--text-4); margin:0;'>无孩子相关支出负担。</p>"}
+          <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
+            ${(S.children || []).map((c, i) => {
+              const b = ym(c.date);
+              const b1 = ym(S.me.birth);
+              let infoTxt = "";
+              if (isFinite(b)) {
+                if (c.born) {
+                  const age = NOW - b;
+                  if (age < 0) infoTxt = "出生日期不能晚于今天";
+                  else if (age >= CHILD_MONTHS) infoTxt = `已经 ${ageTxt(age)}，满 22 岁独立了，不再计算花费`;
+                  else infoTxt = `现在 ${ageTxt(age)}，${STAGE_NAMES[stageIdx(Math.floor(age / 12))]}；还要抚养约 ${durTxt(CHILD_MONTHS - age)}，预计共花 ${wan(kidCost(S, c, NOW))}`;
+                } else {
+                  if (b < NOW) infoTxt = "计划出生时间要晚于现在；已经出生的请选“已出生”";
+                  else infoTxt = `出生时你 ${isFinite(b1) ? ageTxt(b - b1) : ""}，抚养到大学毕业预计共花 ${wan(kidCost(S, c, NOW))}（含生育费用）`;
+                }
+              }
+
+              return `
+                <div style="background:#ffffff; border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <b style="font-size:13.5px; color:#0f172a;">孩子 ${i + 1}</b>
+                      <div style="display:inline-flex; background:#f1f5f9; border-radius:999px; padding:2px;">
+                        <button type="button" class="btn-pill ${c.born ? "primary" : "secondary"}" style="padding:2px 8px; font-size:10.5px;" onclick="setKidBorn(${i}, true)">已出生</button>
+                        <button type="button" class="btn-pill ${!c.born ? "primary" : "secondary"}" style="padding:2px 8px; font-size:10.5px;" onclick="setKidBorn(${i}, false)">计划中</button>
+                      </div>
+                    </div>
+                    <button type="button" class="dial-btn" onclick="removeKid(${i})" title="删除孩子">✕</button>
+                  </div>
+
+                  <div class="f-row">
+                    <span class="f-label">${c.born ? "出生日期" : "计划哪个月出生"}</span>
+                    <div class="f-inp-wrap">
+                      ${c.born
+                        ? `<input type="date" value="${c.date}" onchange="updateKidDate(${i}, this.value)">`
+                        : `<input type="month" value="${c.date}" onchange="updateKidDate(${i}, this.value)">`
+                      }
+                    </div>
+                    ${infoTxt ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">${infoTxt}</span>` : ""}
+                  </div>
+                </div>
+              `;
+            }).join("")}
+
+            <button type="button" class="btn-pill secondary" onclick="addNewKid()" style="margin-top:4px; justify-content:center;">+ 添加一个孩子</button>
+          </div>
+
+          <!-- 各阶段抚养费用配置 -->
+          <div style="background:#f1f5f9; border-radius:20px; padding:16px; margin-top:14px; display:flex; flex-direction:column; gap:12px;">
+            <h4 style="margin:0; font-size:13.5px; font-weight:900; color:#0f172a;">每个孩子各阶段每月开支</h4>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+              ${STAGES.map((label, idx) => `
+                <div class="f-row">
+                  <span class="f-label" style="font-size:11px;">${label}</span>
+                  <div class="f-inp-wrap"><input type="number" step="100" value="${S.stage[idx]}" onchange="updateStageCost(${idx}, +this.value)"><span class="f-unit">元</span></div>
+                </div>
+              `).join("")}
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
+              <div class="f-row">
+                <span class="f-label">备孕与生育一次性开销</span>
+                <div class="f-inp-wrap"><input type="number" step="1" value="${S.birthCost || 5}" onchange="updateInput('birthCost', +this.value)"><span class="f-unit">万元</span></div>
+              </div>
+              <div class="f-row">
+                <span class="f-label">教育与花费每年涨幅</span>
+                <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.eduGrowth || 3}" onchange="updateInput('eduGrowth', +this.value)"><span class="f-unit">%</span></div>
+              </div>
+            </div>
+
+            <div class="f-row">
+              <span class="f-label">每月子女教育个税抵扣省税</span>
+              <div class="f-inp-wrap"><input type="number" step="50" value="${S.childTax || 400}" onchange="updateInput('childTax', +this.value)"><span class="f-unit">元/月</span></div>
+              <span class="f-hint">子女教育、婴幼儿照护专项附加扣除每月节省的个税。</span>
+            </div>
+          </div>
+        ` : `
+          <p style="font-size:12px; color:var(--text-4); margin:4px 0 0;">未勾选，测算中不计入孩子抚养支出。</p>
+        `}
       </div>
     `;
   } else if (activeModalCat === "big") {
@@ -2841,6 +2939,58 @@ window.addOneOffPreset = function() {
   S.oneOffs.push({ name: "大额预算", date: ymStr(NOW + 60), amount: 10, every: 0 });
   save();
   renderModalContent();
+  renderResults();
+};
+
+window.updateKidsToggle = function(checked) {
+  S.hasKids = checked;
+  if (checked && (!S.children || !S.children.length)) {
+    S.children = [newChild()];
+  }
+  save();
+  renderModalContent();
+  renderHeaderPills();
+  renderResults();
+};
+
+window.setKidBorn = function(idx, born) {
+  const c = S.children[idx];
+  c.born = born;
+  c.date = born ? todayStr : ymStr(NOW + 12);
+  save();
+  renderModalContent();
+  renderResults();
+};
+
+window.updateKidDate = function(idx, date) {
+  S.children[idx].date = date;
+  save();
+  renderModalContent();
+  renderHeaderPills();
+  renderResults();
+};
+
+window.removeKid = function(idx) {
+  S.children.splice(idx, 1);
+  if (!S.children.length) S.hasKids = false;
+  save();
+  renderModalContent();
+  renderHeaderPills();
+  renderResults();
+};
+
+window.addNewKid = function() {
+  if (!S.children) S.children = [];
+  S.children.push(newChild());
+  save();
+  renderModalContent();
+  renderHeaderPills();
+  renderResults();
+};
+
+window.updateStageCost = function(idx, val) {
+  S.stage[idx] = val;
+  save();
   renderResults();
 };
 
