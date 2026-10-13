@@ -1206,7 +1206,7 @@ const DEFAULTS = {
   spouse: { birth: "1997-06-20", gender: "female55" },
   assets: 5,
   stopMe: "2044-03", together: true, stopSpouse: "2044-03",
-  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, outlook: "stable", upRate: 3, downRate: 3,
+  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, outlook: "stable", upRate: 3, downRate: 3, cutAge: 35, cutPct: 50,
   hasMortgage: true, mortMonthly: 2500, mortEnd: "2046-09", hfOffset: 1000,
   debts: [],
   livingWork: 5000, livingBridge: 3000, livingPension: 3000,
@@ -1297,6 +1297,8 @@ function toParams(s, now) {
     now, sp, b1, b2, st1, st2, P1, P2, T1, T2, together: !!s.together, covered, lastP,
     endAge: s.endAge, E: covered ? lastP : b1 + s.endAge * 12 - now,
     inc1: s.inc1, inc2: sp ? s.inc2 : 0, bonus1: (s.bonus1 * 1e4) / 12, bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0, g: realRate(incomeGrowth(s), s.infl),
+    cut1: s.outlook === "unstable" ? b1 + s.cutAge * 12 - now : Infinity,
+    cut2: sp && s.outlook === "unstable" ? b2 + s.cutAge * 12 - now : Infinity, cutF: s.cutPct / 100,
     assets: s.assets * 1e4, r: realRate(s.ret, s.infl), infl: s.infl / 100, floor: s.floor * 1e4,
     livingWork: s.livingWork, livingBridge: s.livingBridge, livingPension: s.livingPension,
     mort: s.hasMortgage ? s.mortMonthly : 0, mortEnd: s.hasMortgage ? ym(s.mortEnd) - now : -1, hf: s.hasMortgage ? s.hfOffset : 0,
@@ -1360,7 +1362,7 @@ function simulate(p) {
   const baseInc = p.inc1 + p.inc2;
   const rows = new Array(E);
   for (let t = 0; t < E; t++) {
-    const f1 = emp1[t], f2 = emp2[t];
+    const f1 = emp1[t] * (t >= p.cut1 ? p.cutF : 1), f2 = emp2[t] * (t >= p.cut2 ? p.cutF : 1);
     const grow = Math.pow(1 + p.g, t / 12);
     const share = baseInc > 0 ? (p.inc1 * f1 + p.inc2 * f2) / baseInc : 0;
     const salary = (p.inc1 * f1 + p.inc2 * f2) * grow;
@@ -1711,13 +1713,16 @@ function bodyIncome() {
   const sp = S.hasSpouse;
   return `${two(num("inc1", "你每月到手", "元"), num("bonus1", "你的年终奖", "万/年"))}
     ${sp ? two(num("inc2", "伴侣每月到手", "元"), num("bonus2", "伴侣的年终奖", "万/年")) : ""}
-    ${select("outlook", "工作前景", [["stable", "稳定：收入不变"], ["up", "上升：收入每年上涨"], ["down", "下降：收入每年下降"]])}
+    ${select("outlook", "工作前景", [["stable", "稳定：收入不变"], ["up", "上升：收入每年上涨"], ["down", "下降：收入每年下降"], ["unstable", "不稳定：过了某个年龄收入减少"]])}
     ${
       S.outlook === "up"
         ? num("upRate", "每年大概涨", "%", { hint: "参考：2025 年全国城镇私营单位平均工资涨了 3.0%，非私营单位涨了 4.3%（国家统计局）；2024 年分别只涨了 1.7% 和 2.8%。" })
         : S.outlook === "down"
           ? num("downRate", "每年大概降", "%", { hint: "比如行业收缩、降薪降级。按每年降 3% 算，10 年后收入约为现在的 74%。" })
-          : `<div class="hint" style="margin:-8px 0 12px">按现在的到手收入一直不变来算，比较稳妥。</div>`
+          : S.outlook === "unstable"
+            ? `${two(num("cutAge", "从多少岁开始", "岁", { kind: "int" }), num("cutPct", "收入变成原来的", "%"))}
+              <div class="hint" style="margin:-8px 0 12px">两人各自满这个年龄后，工资、年终奖和公积金都按这个比例算，之前保持不变；现在已经过了这个年龄的，从现在起就按这个比例算。</div>`
+            : `<div class="hint" style="margin:-8px 0 12px">按现在的到手收入一直不变来算，比较稳妥。</div>`
     }
     <div class="hint" style="margin-top:-4px">都按税后到手填，提前退休后工资和年终奖都没有了。公积金在“负债 → 房贷”里填；房租、兼职等其他收入在“高级设置”里填。</div>`;
 }
@@ -1921,7 +1926,8 @@ const CATS = [
     sum() {
       const sp = S.hasSpouse;
       const bonus = S.bonus1 + (sp ? S.bonus2 : 0);
-      const trend = S.outlook === "up" ? `每年涨 ${S.upRate}%` : S.outlook === "down" ? `每年降 ${S.downRate}%` : "收入稳定";
+      const trend = S.outlook === "up" ? `每年涨 ${S.upRate}%` : S.outlook === "down" ? `每年降 ${S.downRate}%`
+        : S.outlook === "unstable" ? `${S.cutAge} 岁后收入${S.cutPct === 50 ? "减半" : `变成 ${S.cutPct}%`}` : "收入稳定";
       return `每月到手 ${fmt(S.inc1 + (sp ? S.inc2 : 0))} 元${bonus ? ` · 年终奖 ${+bonus.toFixed(1)} 万` : ""} · ${trend}`;
     },
   },
@@ -2227,6 +2233,8 @@ function validate(s) {
   if (s.ret <= -50 || s.ret > 30) errs.push("投资收益请填 −50% 到 30% 之间的数。");
   if (s.outlook === "up" && !(s.upRate >= 0 && s.upRate <= 30)) errs.push("收入每年上涨请填 0% 到 30% 之间的数。");
   if (s.outlook === "down" && !(s.downRate >= 0 && s.downRate <= 50)) errs.push("收入每年下降请填 0% 到 50% 之间的数。");
+  if (s.outlook === "unstable" && !(s.cutAge >= 18 && s.cutAge <= 70)) errs.push("收入减少的年龄请填 18 到 70 岁之间。");
+  if (s.outlook === "unstable" && !(s.cutPct >= 0 && s.cutPct <= 100)) errs.push("收入变成原来的比例请填 0% 到 100% 之间的数。");
   if (s.stage.some((x) => x < 0)) errs.push("孩子的花费不能是负数。");
   return errs;
 }
