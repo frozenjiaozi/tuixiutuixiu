@@ -3294,88 +3294,167 @@ function renderModalContent() {
   }
 }
 
-window.updateStopAge = function(who, val) {
+function syncStops(s) {
+  const b1 = ym(s.me.birth);
+  const b2 = ym(s.spouse.birth);
+  if (isFinite(b1)) s.stopMe = ymStr(b1 + s.stopAgeMe * 12);
+  if (isFinite(b2)) s.stopSpouse = ymStr(b2 + s.stopAgeSpouse * 12);
+}
+
+// 统一数据变更同步并刷新界面
+function applyStateChange(rerenderModal = true) {
+  syncStops(S);
+  save();
+  renderHeaderPills();
+  renderCompactDials();
+  renderResults();
+  if (rerenderModal) {
+    renderModalNav();
+    renderModalContent();
+  }
+}
+window.applyStateChange = applyStateChange;
+
+function updateSpouse(val) {
+  S.hasSpouse = val;
+  applyStateChange(true);
+}
+window.updateSpouse = updateSpouse;
+
+function updateInput(path, val) {
+  setPath(S, path, val);
+  if (path === "hasMortgage" && S.hasMortgage && !(ym(S.mortEnd) >= NOW)) {
+    S.mortEnd = ymStr(NOW + 239);
+  }
+  // 如果是结构性字段切换，需要立即重新渲染弹窗内容以展现或隐藏联动字段
+  const structuralFields = [
+    "hasMortgage", "hasRent", "hasKids", "hasSpouse", "together",
+    "outlook", "pensionMode", "afterPension", "siAfter", "me.gender", "spouse.gender"
+  ];
+  const needRerender = structuralFields.includes(path) || path.includes("birth");
+  applyStateChange(needRerender);
+}
+window.updateInput = updateInput;
+
+function updateStopAge(who, val) {
   if (who === "me") {
     S.stopAgeMe = val;
-    const b1 = ym(S.me.birth);
-    if (isFinite(b1)) S.stopMe = ymStr(b1 + val * 12);
     if (S.together && S.hasSpouse) {
       S.stopAgeSpouse = val;
-      const b2 = ym(S.spouse.birth);
-      if (isFinite(b2)) S.stopSpouse = ymStr(b2 + val * 12);
     }
   } else {
     S.stopAgeSpouse = val;
-    const b2 = ym(S.spouse.birth);
-    if (isFinite(b2)) S.stopSpouse = ymStr(b2 + val * 12);
   }
-  save();
-  renderModalContent();
-  renderCompactDials();
-  renderResults();
-};
+  applyStateChange(true);
+}
+window.updateStopAge = updateStopAge;
 
-window.updateDebtItem = function(idx, key, val) {
+function updateKidsToggle(checked) {
+  S.hasKids = checked;
+  if (checked && (!S.children || !S.children.length)) {
+    S.children = [newChild()];
+  }
+  applyStateChange(true);
+}
+window.updateKidsToggle = updateKidsToggle;
+
+function setKidBorn(idx, born) {
+  const c = S.children[idx];
+  c.born = born;
+  c.date = born ? todayStr : ymStr(NOW + 12);
+  applyStateChange(true);
+}
+window.setKidBorn = setKidBorn;
+
+function updateKidDate(idx, date) {
+  S.children[idx].date = date;
+  applyStateChange(true);
+}
+window.updateKidDate = updateKidDate;
+
+function removeKid(idx) {
+  S.children.splice(idx, 1);
+  if (!S.children.length) S.hasKids = false;
+  applyStateChange(true);
+}
+window.removeKid = removeKid;
+
+function addNewKid() {
+  if (!S.children) S.children = [];
+  S.children.push(newChild());
+  applyStateChange(true);
+}
+window.addNewKid = addNewKid;
+
+function updateStageCost(idx, val) {
+  S.stage[idx] = val;
+  applyStateChange(false);
+}
+window.updateStageCost = updateStageCost;
+
+function updateDebtItem(idx, key, val) {
   S.debts[idx][key] = val;
-  save();
-  renderModalContent();
-  renderHeaderPills();
-  renderResults();
-};
+  applyStateChange(key === 'end');
+}
+window.updateDebtItem = updateDebtItem;
 
-window.removeDebt = function(idx) {
+function removeDebt(idx) {
   S.debts.splice(idx, 1);
-  save();
-  renderModalContent();
-  renderHeaderPills();
-  renderResults();
-};
+  applyStateChange(true);
+}
+window.removeDebt = removeDebt;
 
-window.addNewDebt = function() {
+function addNewDebt() {
   if (!S.debts) S.debts = [];
   S.debts.push({ name: "车贷", monthly: 2000, end: ymStr(NOW + 35) });
-  save();
-  renderModalContent();
-  renderHeaderPills();
-  renderResults();
-};
+  applyStateChange(true);
+}
+window.addNewDebt = addNewDebt;
 
-window.addOneOffByPreset = function(presetKey) {
+function addOneOffByPreset(presetKey) {
   S.oneOffs.push(presetItem(S, presetKey));
-  save();
-  renderModalContent();
-  renderResults();
-};
+  applyStateChange(true);
+}
+window.addOneOffByPreset = addOneOffByPreset;
 
-window.updateOneOffItem = function(idx, key, val) {
+function updateOneOffItem(idx, key, val) {
   S.oneOffs[idx][key] = val;
-  save();
-  renderModalContent();
-  renderResults();
-};
+  applyStateChange(key === 'every' || key === 'date');
+}
+window.updateOneOffItem = updateOneOffItem;
 
-window.updateIncomeItem = function(idx, key, val) {
-  S.incomes[idx][key] = val;
-  save();
-  renderModalContent();
-  renderResults();
-};
+function removeOneOff(idx) {
+  S.oneOffs.splice(idx, 1);
+  applyStateChange(true);
+}
+window.removeOneOff = removeOneOff;
 
-window.removeIncome = function(idx) {
-  S.incomes.splice(idx, 1);
-  save();
-  renderModalContent();
-  renderResults();
-};
+function addOneOffPreset() {
+  S.oneOffs.push({ name: "大额预算", date: ymStr(NOW + 60), amount: 10, every: 0 });
+  applyStateChange(true);
+}
+window.addOneOffPreset = addOneOffPreset;
 
-window.addNewIncome = function() {
+function addNewIncome() {
   if (!S.incomes) S.incomes = [];
   const a0 = stopAgeYears(S);
   S.incomes.push({ name: "其他收入", monthly: 1000, from: a0, to: a0 + 9 });
-  save();
-  renderModalContent();
-  renderResults();
-};
+  applyStateChange(true);
+}
+window.addNewIncome = addNewIncome;
+
+function updateIncomeItem(idx, key, val) {
+  S.incomes[idx][key] = val;
+  applyStateChange(false);
+}
+window.updateIncomeItem = updateIncomeItem;
+
+function removeIncome(idx) {
+  S.incomes.splice(idx, 1);
+  applyStateChange(true);
+}
+window.removeIncome = removeIncome;
+
 // 按钮监听绑定
 document.getElementById("btn-open-modal").addEventListener("click", openFinanceModal);
 document.getElementById("btn-profile-pill").addEventListener("click", openFinanceModal);
