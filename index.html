@@ -1372,7 +1372,6 @@ function pensionMonthly(base, index, years, claimAge) {
 }
 
 const OUTLOOK_GROWTH = { stable: () => 0, up: (s) => s.upRate, down: (s) => -s.downRate, unstable: () => 0 };
-const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
 
 function toParams(s, now = NOW) {
   const sp = !!s.hasSpouse;
@@ -1394,12 +1393,12 @@ function toParams(s, now = NOW) {
     inc2: sp ? s.inc2 : 0,
     bonus1: (s.bonus1 * 1e4) / 12,
     bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0,
-    g: realRate((OUTLOOK_GROWTH[s.outlook] || OUTLOOK_GROWTH.stable)(s), s.infl),
+    g: (OUTLOOK_GROWTH[s.outlook] || OUTLOOK_GROWTH.stable)(s) / 100,
     cut1: s.outlook === "unstable" ? b1 + s.cutAge * 12 - now : Infinity,
     cut2: sp && s.outlook === "unstable" ? b2 + s.cutAge * 12 - now : Infinity,
     cutF: s.cutPct / 100,
     assets: s.assets * 1e4,
-    r: realRate(s.ret, s.infl),
+    r: s.ret / 100,
     infl: s.infl / 100,
     floor: s.floor * 1e4,
     livingWork: s.livingWork,
@@ -1413,7 +1412,7 @@ function toParams(s, now = NOW) {
     children: s.hasKids ? s.children.map((c) => ({ born: !!c.born, b: ym(c.date) - now })) : [],
     stage: s.stage.slice(),
     birthCost: s.birthCost * 1e4,
-    edu: realRate(s.eduGrowth, s.infl),
+    edu: s.eduGrowth / 100,
     childTax: s.childTax,
     mode: s.pensionMode,
     pension1: s.pension1,
@@ -1443,7 +1442,7 @@ const ageYears = (p, t, b) => Math.floor((p.now + t - b) / 12);
 function kidCost(s, c, now) {
   const b = ym(c.date);
   if (!isFinite(b) || (!c.born && b < now)) return 0;
-  const edu = realRate(s.eduGrowth, s.infl);
+  const edu = s.eduGrowth / 100;
   let total = c.born ? 0 : s.birthCost * 1e4;
   for (let t = Math.max(0, b - now); t - (b - now) < CHILD_MONTHS; t++) {
     const age = t - (b - now);
@@ -1507,14 +1506,14 @@ function simulate(p) {
     const share = baseInc > 0 ? (p.inc1 * f1 + p.inc2 * f2) / baseInc : 0;
     const salary = (p.inc1 * f1 + p.inc2 * f2) * grow;
     const bonus = (p.bonus1 * f1 + p.bonus2 * f2) * grow;
-    const defl = Math.pow(1 + p.infl, -(t + 0.5) / 12);
+    const up = Math.pow(1 + p.infl, t / 12);
     const mortOn = t <= p.mortEnd;
     const hf = mortOn ? p.hf * share : 0;
-    const mort = mortOn ? p.mort * defl : 0;
+    const mort = mortOn ? p.mort : 0;
     let debt = 0;
-    for (const d of p.debts) if (t <= d.end) debt += d.monthly * defl;
+    for (const d of p.debts) if (t <= d.end) debt += d.monthly;
     const working = t < p.T1;
-    const living = working ? 0 : !p.covered && t >= p.lastP ? p.livingPension : p.livingBridge;
+    const living = (working ? 0 : !p.covered && t >= p.lastP ? p.livingPension : p.livingBridge) * up;
     const rent = working ? p.rent : 0;
     const anyWork = f1 > 0 || f2 > 0;
     let child = 0;
@@ -1536,7 +1535,7 @@ function simulate(p) {
     let one = 0;
     for (const o of p.oneOffs) if (oneOffAt(o, t)) one += o.amount;
     const net = salary + bonus + hf + pension + other - living - rent - mort - debt - child - med - si - one;
-    rows.push({ t, working, f1, f2, salary, bonus, hf, pension, other, living, rent, mort, debt, child, childBirth, med, si, one, net });
+    rows.push({ t, up, working, f1, f2, salary, bonus, hf, pension, other, living, rent, mort, debt, child, childBirth, med, si, one, net });
   }
   return { rows, m1: s1.m, m2: s2.m, pen1, pen2, minY1, minY2 };
 }
@@ -1551,7 +1550,7 @@ function analyze(p) {
   let FV = 0;
   for (let t = 0; t < T; t++) {
     A = A * (1 + rm) + rows[t].net;
-    FV = FV * (1 + rm) + 1;
+    FV = FV * (1 + rm) + rows[t].up;
   }
   let C = 0;
   let disc = 1;
@@ -1569,7 +1568,7 @@ function assetPath(p, a, living) {
   let A = p.assets;
   const out = [A];
   for (const row of a.rows) {
-    A = A * (1 + a.rm) + row.net - (row.working ? living : 0);
+    A = A * (1 + a.rm) + row.net - (row.working ? living * row.up : 0);
     out.push(A);
   }
   return out;
@@ -2206,7 +2205,8 @@ function renderResults() {
 
   const bridge = p.lastP - p.T1;
   const pensionTotal = a.sim.pen1 + a.sim.pen2;
-  const pensionShort = S.livingBridge - pensionTotal;
+  const livingAtPension = S.livingBridge * Math.pow(1 + p.infl, p.lastP / 12);
+  const pensionShort = livingAtPension - pensionTotal;
   const formula = S.pensionMode === "formula";
 
   let low = p.T1;
@@ -2552,8 +2552,8 @@ function renderResults() {
                 : "按你直接填的金额。"}
             </p>
             ${p.covered ? (pensionShort <= 0
-              ? `<p style="margin:0; border-radius:16px; background:rgba(209,250,229,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#064e3b; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，完全够覆盖提前退休后每月 <b>${fmt(S.livingBridge)}</b> 的日常开支。</p>`
-              : `<p style="margin:0; border-radius:16px; background:rgba(254,243,199,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#78350f; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，比提前退休后每月 <b>${fmt(S.livingBridge)}</b> 的日常开支少约 <b>${fmt(pensionShort)}</b>。领养老金时留下的 ${wan(p.floor)}能补这个差约 <b>${Math.floor(p.floor / (pensionShort * 12))}</b> 年；觉得不够，可以把备用金调高。</p>`
+              ? `<p style="margin:0; border-radius:16px; background:rgba(209,250,229,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#064e3b; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，完全够覆盖 ${fmtYM(NOW + p.lastP)} 时每月约 <b>${fmt(livingAtPension)}</b> 的日常开支（今天的 ${fmt(S.livingBridge)} 按物价上涨后）。</p>`
+              : `<p style="margin:0; border-radius:16px; background:rgba(254,243,199,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#78350f; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，比 ${fmtYM(NOW + p.lastP)} 时每月约 <b>${fmt(livingAtPension)}</b> 的日常开支（今天的 ${fmt(S.livingBridge)} 按物价上涨后）少约 <b>${fmt(pensionShort)}</b>。领养老金时留下的 ${wan(p.floor)}能补这个差约 <b>${Math.floor(p.floor / (pensionShort * 12))}</b> 年；觉得不够，可以把备用金调高。</p>`
             ) : ""}
           </div>
         </div>
@@ -2617,7 +2617,7 @@ function renderResults() {
     </div>
 
     <!-- 8. 工作风险分析 -->
-    ${jobAges.length ? `<div class="bento-card bento-section">
+    <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
         <div>
@@ -2631,7 +2631,7 @@ function renderResults() {
         <span><i style="border-top:2px dashed #94a3b8; height:0; border-radius:0; width:14px; vertical-align:3px;"></i> 现在的月开销 ${fmt(spend)}</span>
       </div>
       <div class="chart-box" id="chart-job"></div>
-    </div>` : ""}
+    </div>
 
     <!-- 9. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
@@ -2696,8 +2696,8 @@ function renderResults() {
           <tbody>
             ${blocks.map((s) => {
               const rs = a.rows.slice(s, s + 12);
-              const living = rs.reduce((sum, r) => sum + (r.working ? p.livingWork : r.living), 0);
-              const net = rs.reduce((sum, r) => sum + r.net - (r.working ? p.livingWork : 0), 0);
+              const living = rs.reduce((sum, r) => sum + (r.working ? p.livingWork * r.up : r.living), 0);
+              const net = rs.reduce((sum, r) => sum + r.net - (r.working ? p.livingWork * r.up : 0), 0);
               const hit = s <= p.T1 && p.T1 < s + 12;
               return `
                 <tr class="${hit ? "retire-row" : ""}">
@@ -2724,7 +2724,7 @@ function renderResults() {
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">计算方法与政策公式说明</summary>
       <div style="margin-top:16px; font-size:12.5px; color:var(--text-3); font-weight:600; line-height:1.9;">
-        <p>按月计算，已经考虑了物价上涨，投资收益按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。</p>
+        <p>按月计算，投资收益按填写的年化收益按月复利，页面上的金额都是到时候的账面金额。只有日常开销每年按“物价每年上涨”增加（填写的是今天的价格），工资、教育费按各自填写的涨幅变化，房贷、负债、公积金、房租、养老金、社保医保、大额支出、备用金等都按填写的金额固定不变。“工作期间每月最多能花”按今天的物价表示，之后同样随物价上涨。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。</p>
         <p>法定退休时间按 2025 年起施行的渐进式延迟退休规定推算：男性原 60 岁，1965 年起出生的每 4 个月延迟 1 个月，最多到 63 岁；女性统一按原 55 岁算，1970 年起出生的每 4 个月延迟 1 个月，最多到 58 岁。领养老金最低缴费年限 2030 年起每年加半年，2039 年起为 20 年。</p>
         <p>${S.hasRent ? "房租只算到提前退休当月。" : ""}房贷和其他负债按合同月供计算。失业的月份和提前退休后到领养老金之前自己交医保。</p>
         <p>养老金公式：基础养老金 =（计发基数 + 本人平均缴费水平）÷ 2 × 缴费年数 × 1%；个人账户养老金 = 账户累计 ÷ 计发月数（55 岁 170、58 岁 152、60 岁 139、63 岁 117 等，按国家计发月数表）。</p>
@@ -2814,12 +2814,12 @@ function drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm) {
   });
 
   const jobBox = document.getElementById("chart-job");
-  if (jobBox && jobAges.length) {
+  if (jobBox) {
     groupedBars(jobBox, {
       cats: jobAges.map((x) => ({ label: `${x} 岁`, title: `你 ${x} 岁失业` })),
       series: [
-        { name: "1 年后收入减半", color: "#059669", values: lossHalf.map((v) => (isFinite(v) ? Math.max(0, floor100(v)) : 0)) },
-        { name: "再也找不到工作", color: "#f59e0b", values: lossPerm.map((v) => (isFinite(v) ? Math.max(0, floor100(v)) : 0)) },
+        { name: "1 年后收入减半", color: "#059669", values: lossHalf.map((v) => (isFinite(v) ? floor100(v) : 0)) },
+        { name: "再也找不到工作", color: "#f59e0b", values: lossPerm.map((v) => (isFinite(v) ? floor100(v) : 0)) },
       ],
       ref: { value: S.livingWork },
     });
@@ -3386,7 +3386,7 @@ function renderModalContent() {
         <div class="f-row">
           <span class="f-label">物价每年上涨率 (长期通胀)</span>
           <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.infl}" onchange="updateInput('infl', +this.value)"><span class="f-unit">% / 年</span></div>
-          <span class="f-hint">近两年物价基本持平，稳妥测算一般填 1%~2%。</span>
+          <span class="f-hint">只用于日常开销逐年上涨，一般填 1%~2%。</span>
         </div>
 
         <div class="f-row" style="margin-top:10px;">
