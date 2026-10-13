@@ -1831,7 +1831,7 @@ function groupedBars(box, { cats, series, ref }) {
   if (ref) el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref", "pointer-events": "none" }, svg);
 }
 
-function stackedBars(box, { cats, segs, line, parts = [], balance, xStep, titles, save }) {
+function stackedBars(box, { cats, segs, line, parts = [], balance, xStep, titles }) {
   box.innerHTML = "";
   const W = 960, H = 300, m = { l: 60, r: balance ? 64 : 16, t: 16, b: 34 };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
@@ -1867,9 +1867,7 @@ function stackedBars(box, { cats, segs, line, parts = [], balance, xStep, titles
           tipRow("", "支出合计", `${totals[i].toFixed(1)} 万`) +
           parts.map((g) => tipRow("", g.name, `${g.values[i].toFixed(1)} 万`)).join("") +
           tipRow(line.color, line.name, `${line.values[i].toFixed(1)} 万`) +
-          (save
-            ? tipRow("", "<b>当年存款增加</b>", `<b>${(line.values[i] - totals[i]).toFixed(1)} 万</b>`)
-            : tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`)) +
+          tipRow("", `<b>${line.values[i] >= totals[i] ? "当年存款增加" : "当年存款减少"}</b>`, `<b>${Math.abs(line.values[i] - totals[i]).toFixed(1)} 万</b>`) +
           (balance ? tipRow(balance.color, balance.name, `${balance.values[i].toFixed(1)} 万`) : ""),
         evt
       ));
@@ -2380,7 +2378,7 @@ function renderResults() {
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
         <div>
           <h2 class="bento-title">提前退休后每年的收支</h2>
-          <p class="bento-desc">从提前退休那个月起，每 12 个月一根柱子。柱子高出收入线的部分要从存款里拿。</p>
+          <p class="bento-desc">从提前退休那个月起，每 12 个月一根柱子。收入线包含存款的理财收益，柱子高出收入线的部分就是当年存款减少的钱。</p>
         </div>
       </div>
       <div class="legend">
@@ -2389,7 +2387,7 @@ function renderResults() {
         <span><i style="background:#8b5cf6;"></i> 房贷负债</span>
         <span><i style="background:#06b6d4;"></i> 社保医保</span>
         <span><i style="background:#ec4899;"></i> 大额支出</span>
-        <span><i class="ln"></i> 托底收入线</span>
+        <span><i class="ln"></i> 收入（养老金、其他收入${sp && !p.together ? "、伴侣工资" : ""}、理财收益）</span>
         <span><i class="ln bal"></i> 年末存款（右轴）</span>
       </div>
       <div class="chart-box" id="chart-post"></div>
@@ -2597,21 +2595,19 @@ function drawCharts(p, a, plan, jobAges, lossHalf, lossPerm) {
       ],
       ...(() => {
         const work = blk((r) => r.pension + r.other + r.salary + r.bonus + r.hf);
-        if (!opts.save) return { line: { name: "收入", color: "#0f172a", values: work } };
         // 每月理财收益 = 月初存款 × 月收益率
         const gain = blk((r) => plan[r.t] * a.rm);
         return {
-          parts: [{ name: "工作收入", values: work }, { name: "理财收益", values: gain }],
+          parts: [{ name: opts.incomeName, values: work }, { name: "理财收益", values: gain }],
           line: { name: "收入合计", color: "#0f172a", values: work.map((v, i) => v + gain[i]) },
         };
       })(),
       balance: { name: "年末存款", color: "#2563eb", values: starts.map((s) => plan[Math.min(s + 12, to)] / 1e4) },
       xStep: cats.length > 30 ? 5 : cats.length > 15 ? 2 : 1,
-      save: opts.save,
     });
   };
-  cashChart("chart-pre", 0, a.T, { houseName: p.rent > 0 ? "房租房贷负债" : "房贷负债", save: true });
-  cashChart("chart-post", a.T, a.E, { houseName: "房贷和负债", save: false });
+  cashChart("chart-pre", 0, a.T, { houseName: p.rent > 0 ? "房租房贷负债" : "房贷负债", incomeName: "工作收入" });
+  cashChart("chart-post", a.T, a.E, { houseName: "房贷和负债", incomeName: "托底收入（养老金等）" });
 }
 
 // ==================== 4. 完整家庭财务弹窗 (Modal) ====================
