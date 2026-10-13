@@ -1206,20 +1206,21 @@ const DEFAULTS = {
   spouse: { birth: "1997-06-20", gender: "female55" },
   assets: 5,
   stopMe: "2044-03", together: true, stopSpouse: "2044-03",
-  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, incGrowth: 0,
+  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, incGrowth: 2,
   hasMortgage: true, mortMonthly: 2500, mortEnd: "2046-09", hfOffset: 1000,
   debts: [],
   livingWork: 5000, livingBridge: 3000, livingPension: 3000,
   hasKids: false, children: [],
-  stage: [3200, 2500, 2500, 3000, 3500, 3000], birthCost: 5, eduGrowth: 1, childTax: 400,
+  stage: [3200, 2500, 2500, 3000, 3500, 3000], birthCost: 5, eduGrowth: 3, childTax: 400,
   oneOffs: [{ name: "换车", date: "2032-06", amount: 10, every: 0 }],
-  ret: 2, infl: 2, floor: 20, afterPension: "covered", endAge: 85,
+  ret: 4, infl: 2, floor: 20, afterPension: "covered", endAge: 85,
   pensionMode: "formula", pension1: 2300, pension2: 2100,
   calcBase: 7831, years1: 7, index1: 0.6, years2: 7, index2: 0.6,
   siAfter: "stop", flexPension: 940, med: 595,
   incomes: [],
   shock1: { from: null, gap: 1, factor: 50 },
   shock2: { from: null, gap: 1, factor: 70 },
+  rates: "nominal",
 };
 
 const GENDERS = {
@@ -1295,13 +1296,13 @@ function toParams(s, now) {
   return {
     now, sp, b1, b2, st1, st2, P1, P2, T1, T2, together: !!s.together, covered, lastP,
     endAge: s.endAge, E: covered ? lastP : b1 + s.endAge * 12 - now,
-    inc1: s.inc1, inc2: sp ? s.inc2 : 0, bonus1: (s.bonus1 * 1e4) / 12, bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0, g: s.incGrowth / 100,
-    assets: s.assets * 1e4, r: s.ret / 100, infl: s.infl / 100, floor: s.floor * 1e4,
+    inc1: s.inc1, inc2: sp ? s.inc2 : 0, bonus1: (s.bonus1 * 1e4) / 12, bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0, g: realRate(s.incGrowth, s.infl),
+    assets: s.assets * 1e4, r: realRate(s.ret, s.infl), infl: s.infl / 100, floor: s.floor * 1e4,
     livingWork: s.livingWork, livingBridge: s.livingBridge, livingPension: s.livingPension,
     mort: s.hasMortgage ? s.mortMonthly : 0, mortEnd: s.hasMortgage ? ym(s.mortEnd) - now : -1, hf: s.hasMortgage ? s.hfOffset : 0,
     debts: s.debts.map((d) => ({ name: d.name, monthly: +d.monthly || 0, end: ym(d.end) - now })),
     children: s.hasKids ? s.children.map((c) => ({ born: !!c.born, b: ym(c.date) - now })) : [],
-    stage: s.stage.slice(), birthCost: s.birthCost * 1e4, edu: s.eduGrowth / 100, childTax: s.childTax,
+    stage: s.stage.slice(), birthCost: s.birthCost * 1e4, edu: realRate(s.eduGrowth, s.infl), childTax: s.childTax,
     mode: s.pensionMode, pension1: s.pension1, pension2: sp ? s.pension2 : 0,
     base: s.calcBase, years1: s.years1, idx1: s.index1, years2: sp ? s.years2 : 0, idx2: s.index2,
     siAfter: s.siAfter, flex: s.flexPension, med: s.med,
@@ -1310,6 +1311,8 @@ function toParams(s, now) {
     shock1: shockBands(s.shock1), shock2: sp ? shockBands(s.shock2) : [],
   };
 }
+
+const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
 
 const ageYears = (p, t, b) => Math.floor((p.now + t - b) / 12);
 
@@ -1537,6 +1540,13 @@ function sanitize(raw) {
     }
   }
   for (const key of ["me", "spouse"]) if (s[key].gender !== "male") s[key].gender = "female55";
+  if (raw.rates !== "nominal") {
+    const nominal = (k) => {
+      if (isNum(raw[k])) s[k] = Math.round(((1 + raw[k] / 100) * (1 + s.infl / 100) - 1) * 1000) / 10;
+    };
+    ["ret", "incGrowth", "eduGrowth"].forEach(nominal);
+  }
+  s.rates = "nominal";
   return s;
 }
 
@@ -1698,7 +1708,7 @@ function bodyIncome() {
   const sp = S.hasSpouse;
   return `${two(num("inc1", "你每月到手", "元"), num("bonus1", "你的年终奖", "万/年"))}
     ${sp ? two(num("inc2", "伴侣每月到手", "元"), num("bonus2", "伴侣的年终奖", "万/年")) : ""}
-    ${num("incGrowth", "收入每年比物价多涨", "%", { hint: "保守可以填 0" })}
+    ${num("incGrowth", "收入每年涨多少", "%", { hint: "不确定就填 2" })}
     <div class="hint" style="margin-top:-4px">都按税后到手填，提前退休后工资和年终奖都没有了。公积金在“负债 → 房贷”里填；房租、兼职等其他收入在“高级设置”里填。</div>`;
 }
 
@@ -1775,11 +1785,11 @@ function bodyKids() {
       </div>`;
     })
     .join("");
-  const costs = `<details class="sub" data-sub="kid-costs"><summary>每个孩子每月花多少（按今天的钱）</summary><div class="sub-body">
+  const costs = `<details class="sub" data-sub="kid-costs"><summary>每个孩子每月花多少</summary><div class="sub-body">
     <div class="grid-2f">${STAGES.map((l, i) => num(`stage.${i}`, l, "元")).join("")}</div>
     <div class="hint" style="margin:-4px 0 12px">可以把育儿补贴、老人帮带的补贴算进对应阶段。只供到高中就把大学填 0。</div>
     ${num("birthCost", "备孕和生孩子（一次性）", "万", { hint: "只对计划中的孩子算" })}
-    ${num("eduGrowth", "孩子花费每年比物价多涨", "%")}
+    ${num("eduGrowth", "孩子花费每年涨多少", "%")}
     ${num("childTax", "上班期间每个孩子每月少交的个税", "元", { hint: "子女教育、婴幼儿照护专项扣除省下的税" })}
   </div></details>`;
   return `${toggle("hasKids", "有孩子，或计划要孩子")}${list}
@@ -1828,7 +1838,7 @@ function bodyBig() {
       </div>`;
     })
     .join("");
-  return `<div class="hint" style="margin-bottom:6px">以后要花的大钱，按今天的价格填。点一下快速添加：</div>
+  return `<div class="hint" style="margin-bottom:6px">以后要花的大钱，按现在的价格填就行。点一下快速添加：</div>
     <div class="presets">${PRESETS.map(([k, l]) => `<button class="preset" data-action="preset" data-k="${k}">＋ ${l}</button>`).join("")}</div>
     ${items}
     ${S.oneOffs.length ? `<div class="hint">“每隔几年一次”填 0 表示只花一次；比如换车填 10，就是每 10 年换一次。</div>` : ""}`;
@@ -1839,7 +1849,7 @@ function renderIncomes() {
     .map((o, i) => `<div class="row-card"><div class="row-item"><input class="name" type="text" data-path="incomes.${i}.name" data-kind="text" value="${esc(o.name)}">${numInput(`incomes.${i}.monthly`, o.monthly, "num")}<span>元/月</span><button class="link" data-action="del" data-list="incomes" data-i="${i}">删除</button></div>
       <div class="row-item"><span>从你</span>${numInput(`incomes.${i}.from`, o.from, "int")}<span>岁到</span>${numInput(`incomes.${i}.to`, o.to, "int")}<span>岁（含）</span></div></div>`)
     .join("");
-  return `<div class="hint" style="margin-bottom:8px">工资和养老金以外的收入，比如房租、兼职。按今天的钱填。</div>${rows}
+  return `<div class="hint" style="margin-bottom:8px">工资和养老金以外的收入，比如房租、兼职。</div>${rows}
     <button class="btn-sm" data-action="add" data-list="incomes">＋ 添加一项</button>`;
 }
 
@@ -1859,8 +1869,8 @@ function bodyAdv() {
     return derived(`${one("你", a)}${b ? `；${one("伴侣", b)}` : ""}。按规定，最低缴费年限 2030 年起每年加半年，2039 年起为 20 年；不够的会在提前退休后自己交补够。`);
   };
   return `<div class="sub-title">投资和备用金</div>
-    ${two(num("ret", "投资每年收益", "%"), num("infl", "每年通胀", "%"))}
-    <div class="hint" style="margin:-8px 0 12px">投资收益按扣除通胀以后的实际收益填。</div>
+    ${two(num("ret", "投资每年收益", "%"), num("infl", "物价每年上涨", "%"))}
+    <div class="hint" style="margin:-8px 0 12px">投资收益填存款、理财、基金综合下来每年大概的收益率。物价上涨一般填 2 就行。</div>
     ${num("floor", "提前退休后至少留的备用金", "万", { hint: "应急金、父母备用金等。提前退休期间存款任何时候都不低于这个数，领养老金时还剩这么多" })}
     ${select("afterPension", "领养老金以后", [["covered", "养老金够日常生活，存款只撑到领养老金"], ["model", "按实际养老金算，存款撑到指定年龄"]])}
     ${S.afterPension === "model" ? num("endAge", "存款要撑到你几岁", "岁", { kind: "int" }) : ""}
@@ -1923,7 +1933,7 @@ const CATS = [
     },
   },
   { id: "big", title: "大额支出", body: bodyBig, sum: () => (S.oneOffs.length ? S.oneOffs.map((o) => o.name).join("、") : "没有") },
-  { id: "adv", title: "高级设置（可选）", body: bodyAdv, sum: () => `收益 ${S.ret}% · 通胀 ${S.infl}% · 备用金 ${S.floor} 万` },
+  { id: "adv", title: "高级设置（可选）", body: bodyAdv, sum: () => `投资收益 ${S.ret}% · 备用金 ${S.floor} 万` },
 ];
 
 const OPEN = new Set(["basic", "income"]);
@@ -2544,7 +2554,7 @@ function renderResults() {
     p.covered
       ? `按“养老金够日常生活”算：存款只需撑到 ${fmtYM(NOW + p.lastP)}${sp ? "（两人都开始领养老金）" : "（开始领养老金）"}，那时还剩 ${wan(p.floor)}备用金。`
       : `存款按实际养老金一直算到你 ${p.endAge} 岁。`
-  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。提前退休时需要的 ${wan(a.need)}，按每年 ${S.infl}% 通胀相当于那时的约 ${wan(a.need * Math.pow(1 + p.infl, p.T1 / 12))}。${shocked ? "已按你在“高级设置”里填的职业风险计算。" : ""}</p>
+  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。${shocked ? "已按你在“高级设置”里填的职业风险计算。" : ""}</p>
 
   <section>
     <h2>现在每月的钱</h2>
@@ -2560,7 +2570,7 @@ function renderResults() {
         <p class="muted" style="margin:8px 0 0">这个月的情况，单位元。${soon.length ? `未来 12 个月还有大额支出：${soon.join("、")}。` : ""}${planned.length ? `孩子预计 ${planned.join("、")} 出生，之后每月会多出孩子的花费。` : ""}</p>
       </div>
       <div class="card">
-        <h3>养老金估算（今天的钱）</h3>
+        <h3>养老金估算</h3>
         ${pensionBox}
       </div>
     </div>
@@ -2607,21 +2617,21 @@ function renderResults() {
         <span><i class="dash"></i>提前退休时需要 ${wan(a.need)}</span>
       </div>
       <div class="chart-box" id="chart-path"></div>
-      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：存款（万元，今天的购买力）。阴影部分是提前退休以后。</p>
+      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：存款（万元）。阴影部分是提前退休以后。</p>
     </div>
     <h3 style="margin-top:16px">对账的检查点</h3>
     <div class="card tbl">
       <table>
-        <thead><tr><th>时间</th>${minLine ? '<th class="num">最低线</th>' : ""}<th class="num">按每月花 ${fmt(spend)}</th><th class="num">换算成当时的钱</th></tr></thead>
+        <thead><tr><th>时间</th>${minLine ? '<th class="num">最低线</th>' : ""}<th class="num">按每月花 ${fmt(spend)}</th></tr></thead>
         <tbody>${cps
           .map((t) => {
             const lbl = t === p.T1 ? `${fmtYM(NOW + t)} 提前退休时（${stopAge}）` : `${fmtYM(NOW + t)}（你 ${ageAt(t)} 岁）`;
-            return `<tr class="${t === p.T1 ? "strong" : ""}"><td>${lbl}</td>${minLine ? `<td class="num">${wan(minLine[t])}</td>` : ""}<td class="num">${wan(plan[t])}</td><td class="num">${wan(plan[t] * Math.pow(1 + p.infl, t / 12))}</td></tr>`;
+            return `<tr class="${t === p.T1 ? "strong" : ""}"><td>${lbl}</td>${minLine ? `<td class="num">${wan(minLine[t])}</td>` : ""}<td class="num">${wan(plan[t])}</td></tr>`;
           })
           .join("")}</tbody>
       </table>
     </div>
-    <p class="muted" style="margin-top:6px">账户里看到的是当时的钱，和最后一列比。连续两次低于最低线（同样换算成当时的钱），就要减少开销或晚点退休。</p>
+    <p class="muted" style="margin-top:6px">到了这些时间点，看看存款有没有低于最低线。连续两次低于最低线，就要减少开销或晚点退休。</p>
   </section>
 
   <section>
@@ -2636,7 +2646,7 @@ function renderResults() {
         <span><i class="ln"></i>收入（养老金、其他收入${sp && !p.together ? "、伴侣工资" : ""}）</span>
       </div>
       <div class="chart-box" id="chart-post"></div>
-      <p class="muted" style="margin:6px 0 0">从提前退休那个月起，每 12 个月一根柱子。横轴：你的年龄；纵轴：金额（万元，今天的购买力）。柱子高出线的部分要从存款里拿。房贷合同金额固定，按通胀折成今天的钱会越来越少。</p>
+      <p class="muted" style="margin:6px 0 0">从提前退休那个月起，每 12 个月一根柱子。横轴：你的年龄；纵轴：金额（万元）。柱子高出线的部分要从存款里拿。</p>
     </div>
     <div class="grid2" style="margin-top:14px">
       <div class="card">
@@ -2688,14 +2698,14 @@ function renderResults() {
             .join("")}</tbody>
         </table>
       </div>
-      <p class="muted" style="margin-top:6px">每行是从“起始月”开始的 12 个月，单位万元，今天的购买力；蓝线那一行包含提前退休的月份。</p>
+      <p class="muted" style="margin-top:6px">每行是从“起始月”开始的 12 个月，单位万元；蓝线那一行包含提前退休的月份。</p>
     </details>
   </section>
 
   <section class="muted" style="line-height:1.8">
-    计算方法：按月计算，所有金额按今天的购买力，投资收益为扣除通胀后的实际收益，按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。
+    计算方法：按月计算，已经考虑了物价上涨，投资收益按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。
     法定退休时间按 2025 年起施行的渐进式延迟退休规定推算：男性原 60 岁，1965 年起出生的每 4 个月延迟 1 个月，最多到 63 岁；女性统一按原 55 岁算，1970 年起出生的每 4 个月延迟 1 个月，最多到 58 岁。领养老金的最低缴费年限 2030 年起每年加半年，2039 年起为 20 年。
-    房贷和其他负债的月供固定，按通胀折算。失业的月份和提前退休后到领养老金之前，自己交医保。
+    房贷和其他负债按合同月供计算。失业的月份和提前退休后到领养老金之前，自己交医保。
     养老金公式：基础养老金 =（计发基数 + 本人平均缴费水平）÷ 2 × 缴费年数 × 1%；个人账户养老金 = 账户累计 ÷ 计发月数（55 岁 170、58 岁 152、60 岁 139、63 岁 117 等，按国家计发月数表）。
     “需要的存款”是保证提前退休后每个月存款都不低于备用金的最少金额：默认只算到两人都开始领养老金，之后按养老金够日常生活；也可以改成按实际养老金一直算到指定年龄。“每月最多能花”是让提前退休那个月存款刚好等于这个数的工作期间开销。这是规划测算，不是对收益的承诺。
   </section>`;
