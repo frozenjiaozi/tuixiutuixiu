@@ -2117,17 +2117,8 @@ function renderResults() {
   const outSum = nowOut.reduce((sum, [, v]) => sum + v, 0);
   const save = inSum - outSum;
 
-  const soon = [];
-  for (const o of p.oneOffs) {
-    for (let t = 0; t < 12; t++) if (oneOffAt(o, t)) soon.push(`${o.name} ${wan(o.amount)}（${shortYM(NOW + t)}）`);
-  }
-  const planned = p.children.filter((c) => !c.born && c.b >= 0).map((c) => fmtYM(NOW + c.b));
-
   const bridge = p.lastP - p.T1;
   const pensionTotal = a.sim.pen1 + a.sim.pen2;
-  const livingAtPension = S.livingBridge * Math.pow(1 + p.infl, p.lastP / 12);
-  const pensionShort = livingAtPension - pensionTotal;
-  const formula = S.pensionMode === "formula";
 
   let low = p.T1;
   for (let t = p.T1; t <= Math.min(a.E, plan.length - 1); t++) if (plan[t] < plan[low]) low = t;
@@ -2169,10 +2160,6 @@ function renderResults() {
   const preGain = a.have - preSaved;
   const preYears = a.T / 12;
   const houseName = p.rent > 0 ? "房租房贷负债" : "房贷负债";
-
-  // 逐年明细数据块
-  const blocks = [];
-  for (let s = 0; s < a.E; s += 12) blocks.push(s);
 
   box.innerHTML = `
     <!-- 1. 首屏成就大卡 (Answer Card) -->
@@ -2330,87 +2317,7 @@ function renderResults() {
       } “每月开销”指工作期间日常开支，不含房租、房贷、负债和孩子；存款数字已全额扣除这些支出。
     </div>
 
-    <!-- 4. 现在每月的钱与养老金 -->
-    <div class="bento-card bento-section">
-      <div class="bento-header">
-        <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="m7 6 10 10"/></svg></div>
-        <div>
-          <h2 class="bento-title">现在每月的钱与养老金精算</h2>
-        </div>
-      </div>
-
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:24px;">
-        <div style="background:#f8fafc; border-radius:24px; padding:24px;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-            <div>
-              <p style="margin:0; font-size:12px; font-weight:900; color:var(--text-4); text-transform:uppercase;">每月净结余储蓄</p>
-              <p style="margin:4px 0 0; font-size:36px; font-weight:950; color:var(--brand); font-variant-numeric:tabular-nums;">${fmt(save)} <span style="font-size:14px; font-weight:700; color:var(--text-4);">元</span></p>
-            </div>
-            <p style="margin:0; font-size:12px; font-weight:700; color:var(--text-3);">
-              收入 <b>${fmt(inSum)}</b> · 支出 <b>${fmt(outSum)}</b>
-            </p>
-          </div>
-          <div style="margin-top:14px; height:12px; border-radius:999px; background:#e2e8f0; overflow:hidden;">
-            <div style="height:100%; border-radius:999px; background:linear-gradient(90deg, #f59e0b, #f43f5e); width:${Math.min(100, (outSum / Math.max(1, inSum)) * 100)}%;"></div>
-          </div>
-          <p style="margin:6px 0 0; font-size:12px; font-weight:700; color:var(--text-4);">支出占收入比 ${inSum > 0 ? Math.round((outSum / inSum) * 100) : 100}%</p>
-
-          <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <span style="font-size:12px; font-weight:900; color:#0f172a;">● 收入构成</span>
-              ${nowIn.map(([k, v]) => `<div style="display:flex; justify-content:space-between; font-size:12.5px; background:rgba(255,255,255,0.8); padding:8px 12px; border-radius:12px;"><span>${k}</span><b>${fmt(v)}</b></div>`).join("")}
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <span style="font-size:12px; font-weight:900; color:#0f172a;">● 主要支出</span>
-              ${nowOut.map(([k, v]) => `<div style="display:flex; justify-content:space-between; font-size:12.5px; background:rgba(255,255,255,0.8); padding:8px 12px; border-radius:12px;"><span>${k}</span><b>${fmt(v)}</b></div>`).join("")}
-            </div>
-          </div>
-          ${soon.length || planned.length ? `
-            <p style="margin:18px 0 0; border-radius:16px; background:rgba(241,245,249,0.9); padding:12px 14px; font-size:12px; line-height:1.7; color:var(--text-3); font-weight:700;">
-              ${soon.length ? `未来 12 个月还有大额支出：${soon.join("、")}。` : ""}${planned.length ? `孩子预计 ${planned.join("、")} 出生，之后每月会多出孩子的花费。` : ""}
-            </p>
-          ` : ""}
-        </div>
-
-        <div style="background:#f8fafc; border-radius:24px; padding:24px; display:flex; flex-direction:column; justify-content:space-between; gap:16px;">
-          <div>
-            <h4 style="margin:0 0 12px; font-size:15px; font-weight:900;">养老金估算</h4>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; background:#ffffff; padding:12px 16px; border-radius:18px;">
-                <div>
-                  <b style="font-size:13.5px; display:block;">你</b>
-                  <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st1.date)} 起领（${ageTxt(p.st1.ageM)}）${formula ? ` · 共交约 ${(a.sim.m1 / 12).toFixed(1)} 年` : ""}</span>
-                </div>
-                <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen1)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
-              </div>
-              ${p.st2 ? `
-                <div style="display:flex; align-items:center; justify-content:space-between; background:#ffffff; padding:12px 16px; border-radius:18px;">
-                  <div>
-                    <b style="font-size:13.5px; display:block;">伴侣</b>
-                    <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st2.date)} 起领（${ageTxt(p.st2.ageM)}）${formula ? ` · 共交约 ${(a.sim.m2 / 12).toFixed(1)} 年` : ""}</span>
-                  </div>
-                  <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen2)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
-                </div>
-              ` : ""}
-            </div>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <p style="margin:0; font-size:12px; color:var(--text-4); line-height:1.6;">
-              ${formula
-                ? `按公式估算：上班的月份都算缴费年限；提前退休后${S.siAfter === "continue" ? "自己接着交到领养老金" : "停交，不够最低年限的补够"}。最少要交 ${a.sim.minY1} 年${sp ? `（伴侣 ${a.sim.minY2} 年）` : ""}。退休越早，交的年数越少，养老金也越少。没算工资上涨和账户利息，偏保守。`
-                : "按你直接填的金额。"}
-            </p>
-            ${p.covered ? (pensionShort <= 0
-              ? `<p style="margin:0; border-radius:16px; background:rgba(209,250,229,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#064e3b; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，完全够覆盖 ${fmtYM(NOW + p.lastP)} 时每月约 <b>${fmt(livingAtPension)}</b> 的日常开支（今天的 ${fmt(S.livingBridge)} 按物价上涨后）。</p>`
-              : `<p style="margin:0; border-radius:16px; background:rgba(254,243,199,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#78350f; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，比 ${fmtYM(NOW + p.lastP)} 时每月约 <b>${fmt(livingAtPension)}</b> 的日常开支（今天的 ${fmt(S.livingBridge)} 按物价上涨后）少约 <b>${fmt(pensionShort)}</b>。领养老金时留下的 ${wan(p.floor)}能补这个差约 <b>${Math.floor(p.floor / (pensionShort * 12))}</b> 年；觉得不够，可以把备用金调高。</p>`
-            ) : ""}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 5. 退休前每年的收支堆叠图 -->
+    <!-- 4. 退休前每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"/><path d="M16 10h.01"/><path d="M2 8v1a2 2 0 0 0 2 2h1"/></svg></div>
@@ -2467,7 +2374,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 6. 提前退休后每年的收支堆叠图 -->
+    <!-- 5. 提前退休后每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
@@ -2524,7 +2431,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 7. 工作风险分析 -->
+    <!-- 6. 工作风险分析 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
@@ -2541,7 +2448,7 @@ function renderResults() {
       <div class="chart-box" id="chart-job"></div>
     </div>
 
-    <!-- 8. 压力测试表 -->
+    <!-- 7. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
       <div style="padding:24px 28px 16px;">
         <h2 class="bento-title">压力测试</h2>
@@ -2581,54 +2488,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 9. 逐年明细折叠大表 -->
-    <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
-      <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">查看逐年详细现金流明细</summary>
-      <div style="margin-top:16px; overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>你${sp ? "／伴侣" : ""}</th>
-              <th>起始月</th>
-              <th class="num">工资等</th>
-              <th class="num">养老金等</th>
-              <th class="num">日常开支</th>
-              <th class="num">${S.hasRent ? "房租房贷" : "房贷负债"}</th>
-              <th class="num">孩子</th>
-              <th class="num">社保医保</th>
-              <th class="num">大额</th>
-              <th class="num">净额</th>
-              <th class="num">期初存款</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${blocks.map((s) => {
-              const rs = a.rows.slice(s, s + 12);
-              const living = rs.reduce((sum, r) => sum + (r.working ? p.livingWork * r.up : r.living), 0);
-              const net = rs.reduce((sum, r) => sum + r.net - (r.working ? p.livingWork * r.up : 0), 0);
-              const hit = s <= p.T1 && p.T1 < s + 12;
-              return `
-                <tr class="${hit ? "retire-row" : ""}">
-                  <td>${ageAt(s)}${sp ? "／" + ageAt(s, p.b2) : ""}</td>
-                  <td>${shortYM(NOW + s)}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.salary + r.bonus + r.hf, 0))}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.pension + r.other, 0))}</td>
-                  <td class="num">${w1(living)}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.rent + r.mort + r.debt, 0))}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.child, 0))}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.med + r.si, 0))}</td>
-                  <td class="num">${w1(rs.reduce((sum, r) => sum + r.one, 0))}</td>
-                  <td class="num" style="font-weight:900; color:${net < 0 ? "var(--rose)" : "var(--brand)"}">${w1(net)}</td>
-                  <td class="num" style="font-weight:900;">${w1(plan[s])}</td>
-                </tr>
-              `;
-            }).join("")}
-          </tbody>
-        </table>
-      </div>
-    </details>
-
-    <!-- 10. 政策与算法说明折叠 -->
+    <!-- 8. 政策与算法说明折叠 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">计算方法与政策公式说明</summary>
       <div style="margin-top:16px; font-size:12.5px; color:var(--text-3); font-weight:600; line-height:1.9;">
