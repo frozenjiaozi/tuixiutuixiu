@@ -1213,7 +1213,7 @@ const DEFAULTS = {
   hasKids: false, children: [],
   stage: [3200, 2500, 2500, 3000, 3500, 3000], birthCost: 5, eduGrowth: 3, childTax: 400,
   oneOffs: [{ name: "换车", date: "2032-06", amount: 10, every: 0 }],
-  ret: 4, infl: 2, floor: 20, afterPension: "covered", endAge: 85,
+  ret: 1, infl: 2, floor: 20, afterPension: "covered", endAge: 85,
   pensionMode: "formula", pension1: 2300, pension2: 2100,
   calcBase: 7831, years1: 7, index1: 0.6, years2: 7, index2: 0.6,
   siAfter: "stop", flexPension: 940, med: 595,
@@ -1700,8 +1700,9 @@ function bodyBasic() {
     ${ymField("stopMe", "你计划哪个月提前退休", thisYear, thisYear + 50)}
     ${live("stop-me", stopInfo)}
     ${spouseStop}
-    <div class="sub-title">存款</div>
-    ${num("assets", "现在的存款", "万", { hint: "能随时动用的钱：存款、理财、基金等；不含房子和公积金" })}`;
+    <div class="sub-title">存款和收益</div>
+    ${two(num("assets", "现在的存款", "万"), num("ret", "投资收益年利率", "%"))}
+    <div class="hint" style="margin:-8px 0 12px">存款填能随时动用的钱：存款、理财、基金等，不含房子和公积金。年利率填这些钱综合下来每年大概的收益。</div>`;
 }
 
 function bodyIncome() {
@@ -1869,8 +1870,7 @@ function bodyAdv() {
     return derived(`${one("你", a)}${b ? `；${one("伴侣", b)}` : ""}。按规定，最低缴费年限 2030 年起每年加半年，2039 年起为 20 年；不够的会在提前退休后自己交补够。`);
   };
   return `<div class="sub-title">投资和备用金</div>
-    ${two(num("ret", "投资每年收益", "%"), num("infl", "物价每年上涨", "%"))}
-    <div class="hint" style="margin:-8px 0 12px">投资收益填存款、理财、基金综合下来每年大概的收益率。物价上涨一般填 2 就行。</div>
+    ${num("infl", "物价每年上涨", "%", { hint: "一般填 2 就行" })}
     ${num("floor", "提前退休后至少留的备用金", "万", { hint: "应急金、父母备用金等。提前退休期间存款任何时候都不低于这个数，领养老金时还剩这么多" })}
     ${select("afterPension", "领养老金以后", [["covered", "养老金够日常生活，存款只撑到领养老金"], ["model", "按实际养老金算，存款撑到指定年龄"]])}
     ${S.afterPension === "model" ? num("endAge", "存款要撑到你几岁", "岁", { kind: "int" }) : ""}
@@ -1903,7 +1903,7 @@ const CATS = [
       const parts = [`你 ${Math.floor((NOW - b1) / 12)} 岁`];
       if (S.hasSpouse && isFinite(birthOf("spouse"))) parts.push(`伴侣 ${Math.floor((NOW - birthOf("spouse")) / 12)} 岁`);
       if (isFinite(s1)) parts.push(`${shortYM(s1)} 提前退休`);
-      parts.push(`存款 ${S.assets} 万`);
+      parts.push(`存款 ${S.assets} 万（年利率 ${S.ret}%）`);
       return parts.join(" · ");
     },
   },
@@ -1933,7 +1933,7 @@ const CATS = [
     },
   },
   { id: "big", title: "大额支出", body: bodyBig, sum: () => (S.oneOffs.length ? S.oneOffs.map((o) => o.name).join("、") : "没有") },
-  { id: "adv", title: "高级设置（可选）", body: bodyAdv, sum: () => `投资收益 ${S.ret}% · 备用金 ${S.floor} 万` },
+  { id: "adv", title: "高级设置（可选）", body: bodyAdv, sum: () => `物价上涨 ${S.infl}% · 备用金 ${S.floor} 万` },
 ];
 
 const OPEN = new Set(["basic", "income"]);
