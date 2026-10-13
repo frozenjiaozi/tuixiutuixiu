@@ -1320,10 +1320,15 @@ const THIS_YEAR = Math.floor(NOW / 12);
 const todayStr = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, "0")}-${String(nowD.getDate()).padStart(2, "0")}`;
 
 const fmt = (n) => (isFinite(n) ? Math.round(n).toLocaleString("zh-CN") : "—");
-const wan = (n) => (isFinite(n) ? `${+(n / 1e4).toFixed(1)} 万` : "—");
-const w1 = (n) => (isFinite(n) ? (n / 1e4).toFixed(1) : "—");
-const signedWan = (n) => (!isFinite(n) ? "—" : n >= 0 ? `+${wan(n)}` : `−${wan(-n)}`);
 const floor100 = (x) => Math.floor(x / 100) * 100;
+const wan = (v) => {
+  if (!isFinite(v)) return "—";
+  const x = Math.abs(v / 1e4);
+  const n = x < 10 ? Math.round(x * 10) / 10 : Math.round(x);
+  return (v < 0 && n > 0 ? "−" : "") + n + " 万";
+};
+const signedWan = (v) => (!isFinite(v) ? "—" : (v >= 0 ? "+" : "−") + wan(Math.abs(v)));
+const w1 = (v) => (isFinite(v) ? (Math.round(v / 1000) / 10).toFixed(1) : "—");
 const ceilText = (c) => (isFinite(c) && floor100(c) >= 1000 ? `${fmt(floor100(c))} 元` : "怎么省都不够");
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -1334,38 +1339,112 @@ const setPath = (o, p, v) => {
   ks.reduce((x, k) => x[k], o)[last] = v;
 };
 
-const statutory = (birthIdx, gender) => {
-  const g = GENDERS[gender];
-  if (!isFinite(birthIdx) || !g) return null;
+// 以下计算模型与桌面端 pc/src/pages/retirement/model.ts 逐行一致，修改时两端必须同步
+const STAGES = ["0–2 岁", "3–5 岁（幼儿园）", "6–11 岁（小学）", "12–14 岁（初中）", "15–17 岁（高中）", "18–21 岁（大学）"];
+const STAGE_NAMES = ["婴幼儿", "幼儿园", "小学", "初中", "高中", "大学"];
+
+const calcMonths = (age) => CALC_MONTHS[Math.max(40, Math.min(70, Math.round(age)))];
+const stageIdx = (c) => (c <= 2 ? 0 : c <= 5 ? 1 : c <= 11 ? 2 : c <= 14 ? 3 : c <= 17 ? 4 : 5);
+
+function statutory(birthIdx, gender) {
+  const g = GENDERS[gender] || GENDERS.male;
   const n = birthIdx - g.start;
   const delay = n < 0 ? 0 : Math.min(g.max, Math.floor(n / g.per) + 1);
-  return { date: birthIdx + g.base * 12 + delay, ageM: g.base * 12 + delay, delay, base: g.base };
-};
+  const ageM = g.base * 12 + delay;
+  return { ageM, date: birthIdx + ageM, delay, base: g.base };
+}
 
-const pensionMonthly = (base, index, years, retireAge) => {
-  if (years <= 0) return 0;
-  const basePart = ((base + base * index) / 2) * years * 0.01;
-  const cMonths = CALC_MONTHS[retireAge] || 139;
-  const persPart = (base * index * 0.08 * 12 * years) / cMonths;
-  return basePart + persPart;
-};
-
-const minYearsAt = (dateIdx) => {
+function minYearsAt(dateIdx) {
   const y = Math.floor(dateIdx / 12);
-  if (y < 2030) return 15;
-  return Math.min(20, 15 + (y - 2029) * 0.5);
-};
+  return y < 2030 ? 15 : Math.min(20, 15 + 0.5 * (y - 2029));
+}
 
-const STAGES = ["0–2 岁（婴幼儿）", "3–5 岁（幼儿园）", "6–11 岁（小学）", "12–14 岁（初中）", "15–17 岁（高中）", "18–21 岁（大学）"];
-const STAGE_NAMES = ["婴幼儿", "幼儿园", "小学", "初中", "高中", "大学"];
-const stageIdx = (c) => (c <= 2 ? 0 : c <= 5 ? 1 : c <= 11 ? 2 : c <= 14 ? 3 : c <= 17 ? 4 : 5);
-const newChild = () => ({ born: false, date: ymStr(NOW + 12) });
+function factorAt(bands, a) {
+  let f = 1;
+  for (const [s, e, v] of bands) if (a >= s && a < e) f = v;
+  return f;
+}
+
+function pensionMonthly(base, index, years, claimAge) {
+  const basic = ((base * (1 + index)) / 2) * years / 100;
+  const account = base * index * 0.08 * 12 * years;
+  return basic + account / calcMonths(claimAge);
+}
+
+const OUTLOOK_GROWTH = { stable: () => 0, up: (s) => s.upRate, down: (s) => -s.downRate, unstable: () => 0 };
+const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
+
+function toParams(s, now = NOW) {
+  const sp = !!s.hasSpouse;
+  const b1 = ym(s.me.birth);
+  const b2 = sp ? ym(s.spouse.birth) : NaN;
+  const st1 = statutory(b1, s.me.gender);
+  const st2 = sp ? statutory(b2, s.spouse.gender) : null;
+  const P1 = st1.date - now;
+  const P2 = st2 ? st2.date - now : Infinity;
+  const T1 = ym(s.stopMe) - now;
+  const T2 = sp ? (s.together ? T1 : ym(s.stopSpouse) - now) : 0;
+  const covered = s.afterPension === "covered";
+  const lastP = sp ? Math.max(P1, P2) : P1;
+  return {
+    now, sp, b1, b2, st1, st2, P1, P2, T1, T2, together: !!s.together, covered, lastP,
+    endAge: s.endAge,
+    E: covered ? lastP : b1 + s.endAge * 12 - now,
+    inc1: s.inc1,
+    inc2: sp ? s.inc2 : 0,
+    bonus1: (s.bonus1 * 1e4) / 12,
+    bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0,
+    g: realRate((OUTLOOK_GROWTH[s.outlook] || OUTLOOK_GROWTH.stable)(s), s.infl),
+    cut1: s.outlook === "unstable" ? b1 + s.cutAge * 12 - now : Infinity,
+    cut2: sp && s.outlook === "unstable" ? b2 + s.cutAge * 12 - now : Infinity,
+    cutF: s.cutPct / 100,
+    assets: s.assets * 1e4,
+    r: realRate(s.ret, s.infl),
+    infl: s.infl / 100,
+    floor: s.floor * 1e4,
+    livingWork: s.livingWork,
+    rent: s.hasRent ? s.rent : 0,
+    livingBridge: s.livingBridge,
+    livingPension: s.livingPension,
+    mort: s.hasMortgage ? s.mortMonthly : 0,
+    mortEnd: s.hasMortgage ? ym(s.mortEnd) - now : -1,
+    hf: s.hasMortgage ? s.hfOffset : 0,
+    debts: s.debts.map((d) => ({ name: d.name, monthly: +d.monthly || 0, end: ym(d.end) - now })),
+    children: s.hasKids ? s.children.map((c) => ({ born: !!c.born, b: ym(c.date) - now })) : [],
+    stage: s.stage.slice(),
+    birthCost: s.birthCost * 1e4,
+    edu: realRate(s.eduGrowth, s.infl),
+    childTax: s.childTax,
+    mode: s.pensionMode,
+    pension1: s.pension1,
+    pension2: sp ? s.pension2 : 0,
+    base: s.calcBase,
+    years1: s.years1,
+    idx1: s.index1,
+    years2: sp ? s.years2 : 0,
+    idx2: s.index2,
+    siAfter: s.siAfter,
+    flex: s.flexPension,
+    med: s.med,
+    oneOffs: s.oneOffs.map((o) => ({
+      name: o.name,
+      t: ym(o.date) - now,
+      amount: (+o.amount || 0) * 1e4,
+      every: Math.max(0, Math.round(+o.every || 0)),
+    })),
+    incomes: s.incomes.map((o) => ({ name: o.name, amount: +o.monthly || 0, from: o.from, to: o.to })),
+    shock1: [],
+    shock2: [],
+  };
+}
+
+const ageYears = (p, t, b) => Math.floor((p.now + t - b) / 12);
 
 function kidCost(s, c, now) {
   const b = ym(c.date);
   if (!isFinite(b) || (!c.born && b < now)) return 0;
-  const edu = realRate(s.eduGrowth || 3, s.infl || 1);
-  let total = c.born ? 0 : (s.birthCost || 0) * 1e4;
+  const edu = realRate(s.eduGrowth, s.infl);
+  let total = c.born ? 0 : s.birthCost * 1e4;
   for (let t = Math.max(0, b - now); t - (b - now) < CHILD_MONTHS; t++) {
     const age = t - (b - now);
     total += (+s.stage[stageIdx(Math.floor(age / 12))] || 0) * Math.pow(1 + edu, t / 12);
@@ -1373,123 +1452,93 @@ function kidCost(s, c, now) {
   return total;
 }
 
-const lastPensionDate = (s) => {
-  const a = statutory(ym(s.me.birth), s.me.gender);
-  const b = s.hasSpouse ? statutory(ym(s.spouse.birth), s.spouse.gender) : null;
-  if (!a) return NaN;
-  return b ? Math.max(a.date, b.date) : a.date;
-};
-
-const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
-
-function toParams(s, now = NOW) {
-  const b1 = ym(s.me.birth), b2 = s.hasSpouse ? ym(s.spouse.birth) : b1;
-  const st1 = statutory(b1, s.me.gender), st2 = s.hasSpouse ? statutory(b2, s.spouse.gender) : null;
-  const s1 = ym(s.stopMe), s2 = s.hasSpouse ? (s.together ? s1 : ym(s.stopSpouse)) : s1;
-  const T1 = s1 - now, T2 = s2 - now;
-  const P1 = st1 ? st1.date - now : T1, P2 = st2 ? st2.date - now : T2;
-  const lastP = Math.max(P1, s.hasSpouse ? P2 : -Infinity);
-  const covered = s.afterPension === "covered";
-  const E = covered ? lastP : (b1 + s.endAge * 12) - now;
-  let g = s.outlook === "up" ? s.upRate / 100 : s.outlook === "down" ? -s.downRate / 100 : 0;
-  let cut1 = 1e9, cut2 = 1e9, cutF = 1;
-  if (s.outlook === "unstable") {
-    cut1 = (b1 + s.cutAge * 12) - now;
-    cut2 = (b2 + s.cutAge * 12) - now;
-    cutF = s.cutPct / 100;
+function oneOffAt(o, t) {
+  if (o.every > 0) {
+    const k = t - o.t;
+    return k >= 0 && k % (o.every * 12) === 0;
   }
-  return {
-    now, sp: s.hasSpouse, b1, b2, st1, st2, P1, P2, T1, T2,
-    together: s.together, covered, lastP, endAge: s.endAge, E,
-    inc1: s.inc1, inc2: s.hasSpouse ? s.inc2 : 0, bonus1: s.bonus1 * 1e4, bonus2: s.hasSpouse ? s.bonus2 * 1e4 : 0,
-    g, cut1, cut2, cutF, assets: s.assets * 1e4,
-    r: realRate(s.ret, s.infl), infl: s.infl / 100,
-    floor: s.floor * 1e4,
-    livingWork: s.livingWork, rent: s.hasRent ? s.rent : 0,
-    livingBridge: s.livingBridge, livingPension: s.livingPension,
-    mort: s.hasMortgage ? s.mortMonthly : 0, mortEnd: s.hasMortgage ? ym(s.mortEnd) - now : -1,
-    hf: s.hasMortgage ? s.hfOffset : 0,
-    debts: s.debts.map((d) => ({ name: d.name, monthly: d.monthly, end: ym(d.end) - now })),
-    kids: s.hasKids, children: s.hasKids ? s.children : [],
-    stage: s.stage, edu: realRate(s.eduGrowth, s.infl), childTax: s.childTax,
-    one: s.oneOffs.map((o) => ({ name: o.name, date: ym(o.date) - now, amount: o.amount * 1e4, every: o.every })),
-    mode: s.pensionMode, pension1: s.pension1, pension2: s.hasSpouse ? s.pension2 : 0,
-    base: s.calcBase, idx1: s.index1, yrs1: s.years1, idx2: s.index2, yrs2: s.years2,
-    siAfter: s.siAfter, flex: s.flexPension, med: s.med,
-    incomes: s.incomes.map((i) => ({ name: i.name, monthly: i.monthly, from: (b1 + i.from * 12) - now, to: (b1 + (i.to + 1) * 12) - now })),
-    shock1: [], shock2: [],
-  };
+  return t === o.t;
 }
 
 function simulate(p) {
-  const rows = [];
-  const infM = Math.pow(1 + p.infl, 1 / 12);
-  let wM1 = p.yrs1 * 12, wM2 = p.yrs2 * 12;
-  for (let t = 0; t < p.E; t++) {
-    const age1 = p.now + t - p.b1, age2 = p.sp ? p.now + t - p.b2 : 0;
-    const w1 = t < p.T1, w2 = p.sp && t < p.T2;
-    const inflScale = Math.pow(infM, -t);
-    const gr1 = Math.pow(1 + p.g, t / 12) * (t >= p.cut1 ? p.cutF : 1);
-    const gr2 = Math.pow(1 + p.g, t / 12) * (t >= p.cut2 ? p.cutF : 1);
-    let s1 = w1 ? p.inc1 * gr1 : 0, s2 = w2 ? p.inc2 * gr2 : 0;
-    for (const [a, b, f] of p.shock1) if (t >= a && t < b) s1 *= f;
-    for (const [a, b, f] of p.shock2) if (t >= a && t < b) s2 *= f;
-    let b1 = w1 ? (p.bonus1 / 12) * gr1 : 0, b2 = w2 ? (p.bonus2 / 12) * gr2 : 0;
-    let hf = (w1 || w2) && t <= p.mortEnd ? p.hf * Math.min(1, (s1 + s2) / Math.max(1, p.inc1 + p.inc2)) : 0;
-    if (w1) wM1++;
-    if (w2) wM2++;
-    let pen1 = 0, pen2 = 0;
-    if (t >= p.P1) pen1 = p.mode === "formula" ? pensionMonthly(p.base, p.idx1, wM1 / 12, Math.floor(p.st1.ageM / 12)) : p.pension1;
-    if (p.sp && t >= p.P2) pen2 = p.mode === "formula" ? pensionMonthly(p.base, p.idx2, wM2 / 12, Math.floor(p.st2.ageM / 12)) : p.pension2;
-    let other = 0;
-    for (const i of p.incomes) if (t >= i.from && t < i.to) other += i.monthly;
-    let child = 0;
-    if (p.kids) {
-      for (const c of p.children) {
-        const b = ym(c.date) - p.now;
-        const age = t - b;
-        if (age >= 0 && age < CHILD_MONTHS) {
-          const stIdx = Math.min(5, Math.floor(age / 36));
-          child += Math.max(0, p.stage[stIdx] * Math.pow(1 + p.edu, t / 12) - ((w1 || w2) ? p.childTax : 0));
-        }
+  const E = Math.max(0, p.E);
+  const emp1 = new Float64Array(E);
+  const emp2 = new Float64Array(E);
+  let m1 = p.years1 * 12;
+  let m2 = p.years2 * 12;
+  for (let t = 0; t < E; t++) {
+    const f1 = t < p.T1 ? factorAt(p.shock1, ageYears(p, t, p.b1)) : 0;
+    const f2 = p.sp && t < p.T2 ? factorAt(p.shock2, ageYears(p, t, p.b2)) : 0;
+    emp1[t] = f1;
+    emp2[t] = f2;
+    if (f1 > 0 && t < p.P1) m1++;
+    if (f2 > 0 && t < p.P2) m2++;
+  }
+  const minY1 = minYearsAt(p.st1.date);
+  const minY2 = p.st2 ? minYearsAt(p.st2.date) : 0;
+  const selfPay = (emp, P, months, minY, active) => {
+    const pay = new Float64Array(E);
+    let m = months;
+    if (!active) return { pay, m };
+    for (let t = 0; t < Math.min(E, P); t++) {
+      if (emp[t] > 0) continue;
+      if (p.siAfter === "continue" || (p.mode === "formula" && m < minY * 12)) {
+        pay[t] = p.flex;
+        m++;
       }
     }
-    let mort = t <= p.mortEnd ? p.mort : 0;
+    return { pay, m };
+  };
+  const s1 = selfPay(emp1, p.P1, m1, minY1, true);
+  const s2 = selfPay(emp2, p.P2, m2, minY2, p.sp);
+  const pen1 = p.mode === "formula" ? pensionMonthly(p.base, p.idx1, s1.m / 12, Math.floor(p.st1.ageM / 12)) : p.pension1;
+  const pen2 = !p.st2
+    ? 0
+    : p.mode === "formula"
+      ? pensionMonthly(p.base, p.idx2, s2.m / 12, Math.floor(p.st2.ageM / 12))
+      : p.pension2;
+
+  const baseInc = p.inc1 + p.inc2;
+  const rows = [];
+  for (let t = 0; t < E; t++) {
+    const f1 = emp1[t] * (t >= p.cut1 ? p.cutF : 1);
+    const f2 = emp2[t] * (t >= p.cut2 ? p.cutF : 1);
+    const grow = Math.pow(1 + p.g, t / 12);
+    const share = baseInc > 0 ? (p.inc1 * f1 + p.inc2 * f2) / baseInc : 0;
+    const salary = (p.inc1 * f1 + p.inc2 * f2) * grow;
+    const bonus = (p.bonus1 * f1 + p.bonus2 * f2) * grow;
+    const defl = Math.pow(1 + p.infl, -(t + 0.5) / 12);
+    const mortOn = t <= p.mortEnd;
+    const hf = mortOn ? p.hf * share : 0;
+    const mort = mortOn ? p.mort * defl : 0;
     let debt = 0;
-    for (const d of p.debts) if (t <= d.end) debt += d.monthly;
-    let med = 0, si = 0;
-    if (!w1 && t < p.P1) med += p.med;
-    if (p.sp && !w2 && t < p.P2) med += p.med;
-    const minY1 = p.st1 ? minYearsAt(p.st1.date) : 15;
-    const needSi1 = p.siAfter === "continue" || wM1 < minY1 * 12;
-    if (!w1 && t < p.P1 && needSi1) { si += p.flex; wM1++; }
-    if (p.sp && !w2 && t < p.P2) {
-      const minY2 = p.st2 ? minYearsAt(p.st2.date) : 15;
-      const needSi2 = p.siAfter === "continue" || wM2 < minY2 * 12;
-      if (needSi2) { si += p.flex; wM2++; }
+    for (const d of p.debts) if (t <= d.end) debt += d.monthly * defl;
+    const working = t < p.T1;
+    const living = working ? 0 : !p.covered && t >= p.lastP ? p.livingPension : p.livingBridge;
+    const rent = working ? p.rent : 0;
+    const anyWork = f1 > 0 || f2 > 0;
+    let child = 0;
+    let childBirth = 0;
+    for (const c of p.children) {
+      const age = t - c.b;
+      if (!c.born && age === 0) childBirth += p.birthCost;
+      if (age >= 0 && age < CHILD_MONTHS) {
+        child += Math.max(0, p.stage[stageIdx(Math.floor(age / 12))] * Math.pow(1 + p.edu, t / 12) - (anyWork ? p.childTax : 0));
+      }
     }
+    child += childBirth;
+    const med = (f1 === 0 && t < p.P1 ? p.med : 0) + (p.sp && f2 === 0 && t < p.P2 ? p.med : 0);
+    const si = s1.pay[t] + s2.pay[t];
+    const pension = (t >= p.P1 ? pen1 : 0) + (p.sp && t >= p.P2 ? pen2 : 0);
+    const y1 = ageYears(p, t, p.b1);
+    let other = 0;
+    for (const o of p.incomes) if (y1 >= o.from && y1 <= o.to) other += o.amount;
     let one = 0;
-    for (const o of p.one) {
-      if (o.every > 0) {
-        if (t >= o.date && (t - o.date) % (o.every * 12) === 0) one += o.amount;
-      } else if (t === o.date) one += o.amount;
-    }
-    const anyWork = w1 || w2;
-    const afterAllP = t >= p.lastP;
-    const baseLiving = anyWork ? p.livingWork : afterAllP ? p.livingPension : p.livingBridge;
-    const living = baseLiving * inflScale;
-    const rent = anyWork ? p.rent * inflScale : 0;
-    const inc = (s1 + s2 + b1 + b2 + hf) * inflScale + pen1 + pen2 + other;
-    const exp = (mort + debt + med + si + one) * inflScale + child;
-    const net = inc - exp - rent;
-    rows.push({
-      t, working: anyWork, living, rent: rent,
-      salary: (s1 + s2) * inflScale, bonus: (b1 + b2) * inflScale, hf: hf * inflScale,
-      pension: pen1 + pen2, other, mort: mort * inflScale, debt: debt * inflScale,
-      child, med: med * inflScale, si: si * inflScale, one: one * inflScale, net,
-    });
+    for (const o of p.oneOffs) if (oneOffAt(o, t)) one += o.amount;
+    const net = salary + bonus + hf + pension + other - living - rent - mort - debt - child - med - si - one;
+    rows.push({ t, working, f1, f2, salary, bonus, hf, pension, other, living, rent, mort, debt, child, childBirth, med, si, one, net });
   }
-  return { rows, m1: wM1, m2: wM2, pen1: 0, pen2: 0 };
+  return { rows, m1: s1.m, m2: s2.m, pen1, pen2, minY1, minY2 };
 }
 
 function analyze(p) {
@@ -1504,7 +1553,9 @@ function analyze(p) {
     A = A * (1 + rm) + rows[t].net;
     FV = FV * (1 + rm) + 1;
   }
-  let C = 0, disc = 1, need = p.floor;
+  let C = 0;
+  let disc = 1;
+  let need = p.floor;
   for (let t = T; t < E; t++) {
     C = C * (1 + rm) + rows[t].net;
     disc *= 1 + rm;
@@ -1545,54 +1596,186 @@ function earliest(p) {
 }
 
 function riskAges(p) {
-  const cur = Math.floor((p.now - p.b1) / 12);
-  const R = Math.floor((p.now + p.T1 - p.b1) / 12);
+  const cur = ageYears(p, 0, p.b1);
+  const R = ageYears(p, p.T1, p.b1);
   const a5 = Math.max(cur + 1, R - 5);
   const a10 = Math.max(cur + 1, R - 10);
-  return { cur, R, a5, a10 };
+  const diff = p.sp ? ageYears(p, 0, p.b2) - cur : 0;
+  return { cur, R, a5, a10, s5: a5 + diff, s10: a10 + diff };
 }
 
 function scenarioList(p) {
-  const list = [];
-  list.push({ id: "base", name: "现在设定好的情况", job: true, p });
-  const { a5, a10 } = riskAges(p);
-  const t5 = (p.b1 + a5 * 12) - p.now, t10 = (p.b1 + a10 * 12) - p.now;
-  list.push({ id: "h5", name: `${a5} 岁收入减半`, job: true, p: { ...p, shock1: [[t5, 999, 0.5]], shock2: [] } });
-  list.push({ id: "h5out", name: `${a5} 岁后没有收入`, job: true, p: { ...p, shock1: [[t5, 999, 0]], shock2: [] } });
-  list.push({ id: "h10", name: `${a10} 岁收入减半`, job: true, p: { ...p, shock1: [[t10, 999, 0.5]], shock2: [] } });
-  list.push({ id: "h10out", name: `${a10} 岁后没有收入`, job: true, p: { ...p, shock1: [[t10, 999, 0]], shock2: [] } });
-  list.push({ id: "retDown", name: "投资年化收益少 1%", job: false, p: { ...p, r: Math.max(0, p.r - 0.01) } });
-  list.push({ id: "spendUp", name: "提前退休后每月多花 1,000", job: false, p: { ...p, livingBridge: p.livingBridge + 1000, livingPension: p.livingPension + 1000 } });
+  const { cur, R, a5, a10, s5, s10 } = riskAges(p);
+  const list = [{ id: "base", name: "当前设定", job: true, p }];
+  const job = (id, name, h, w) => list.push({ id, name, job: true, p: { ...p, shock1: h, shock2: p.sp ? w : [] } });
+  if (R - cur >= 2) {
+    job("h10cut30", `你 ${a10} 岁起降薪 30%`, [[a10, 999, 0.7]], []);
+    job("h5gap1half", `你 ${a5} 岁失业 1 年，之后收入减半`, [[a5, a5 + 1, 0], [a5 + 1, 999, 0.5]], []);
+    job("h5out", `你 ${a5} 岁后再也找不到工作`, [[a5, 999, 0]], []);
+    if (a10 < a5) job("h10out", `你 ${a10} 岁后再也找不到工作`, [[a10, 999, 0]], []);
+    if (p.sp) {
+      job("w10gap1cut30", `伴侣 ${s10} 岁失业 1 年，之后降薪 30%`, [], [[s10, s10 + 1, 0], [s10 + 1, 999, 0.7]]);
+      job("both5cut30", `两人从你 ${a5} 岁起都降薪 30%`, [[a5, 999, 0.7]], [[s5, 999, 0.7]]);
+    }
+  }
+  list.push({ id: "r-1", name: "投资收益每年少 1 个百分点", job: false, p: { ...p, r: p.r - 0.01 } });
+  list.push({
+    id: "spend+1000",
+    name: "提前退休后每月多花 1,000",
+    job: false,
+    p: { ...p, livingBridge: p.livingBridge + 1000, livingPension: p.livingPension + 1000 },
+  });
+  if (p.covered) {
+    list.push({
+      id: "pension+2",
+      name: "领养老金再推迟 2 年",
+      job: false,
+      p: { ...p, P1: p.P1 + 24, P2: p.sp ? p.P2 + 24 : p.P2, lastP: p.lastP + 24, E: p.E + 24 },
+    });
+  } else {
+    list.push({ id: "live+5", name: `多活 5 年（存款撑到 ${p.endAge + 5} 岁）`, job: false, p: { ...p, E: p.E + 60 } });
+  }
+  list.push({ id: "later1", name: `晚 1 年退休（${fmtYM(p.now + p.T1 + 12)}）`, job: false, p: withStop(p, p.T1 + 12) });
+  if (p.T1 - 12 >= 1) {
+    list.push({ id: "earlier1", name: `早 1 年退休（${fmtYM(p.now + p.T1 - 12)}）`, job: false, p: withStop(p, p.T1 - 12) });
+  }
   return list;
 }
 
 function buildLevers(s) {
-  const baseP = toParams(s, NOW);
-  const baseEarliest = earliest(baseP);
   const list = [
-    { id: "cut500", name: "工作期间少花 500 元", patch: { livingWork: Math.max(1000, s.livingWork - 500) } },
-    { id: "cut1000", name: "工作期间少花 1,000 元", patch: { livingWork: Math.max(1000, s.livingWork - 1000) } },
-    { id: "bridge500", name: "退休后少花 500 元", patch: { livingBridge: Math.max(1000, s.livingBridge - 500), livingPension: Math.max(1000, s.livingPension - 500) } },
-    { id: "earn1000", name: "工作期每月多赚 1,000 元", patch: { inc1: s.inc1 + 1000 } },
-    { id: "ret1", name: "投资年化收益 +1%", patch: { ret: s.ret + 1 } },
+    { id: "work-500", name: "工作期间每月少花 500 元", patch: { livingWork: s.livingWork - 500 }, when: s.livingWork >= 1500 },
+    { id: "work-1000", name: "工作期间每月少花 1,000 元", patch: { livingWork: s.livingWork - 1000 }, when: s.livingWork >= 2000 },
+    {
+      id: "bridge-500",
+      name: "退休后每月少花 500 元",
+      patch: { livingBridge: s.livingBridge - 500, livingPension: Math.max(0, s.livingPension - 500) },
+      when: s.livingBridge >= 1500,
+    },
+    { id: "inc+1000", name: "每月多赚 1,000 元", patch: { inc1: s.inc1 + 1000 }, when: true },
+    { id: "ret+1", name: "投资收益每年多 1 个百分点", patch: { ret: s.ret + 1 }, when: true },
   ];
-  return list.map((item) => {
-    const nextState = { ...s, ...item.patch };
-    const e = earliest(toParams(nextState, NOW));
-    return { ...item, earliest: e, baseEarliest };
-  });
+  return list
+    .filter((x) => x.when)
+    .map((x) => ({ id: x.id, name: x.name, earliest: earliest(toParams({ ...s, ...x.patch }, NOW)) }));
 }
+
+const birthOf = (s, key) => ym(s[key].birth);
+const statOf = (s, key) => {
+  const b = birthOf(s, key);
+  return isFinite(b) ? statutory(b, s[key].gender) : null;
+};
+
+const lastPensionDate = (s) => {
+  const a = statOf(s, "me");
+  const b = s.hasSpouse ? statOf(s, "spouse") : null;
+  if (!a || (s.hasSpouse && !b)) return NaN;
+  return b ? Math.max(a.date, b.date) : a.date;
+};
+
+const newChild = () => ({ born: false, date: ymStr(NOW + 12) });
+
+function validate(s) {
+  const errs = [];
+  const sp = s.hasSpouse;
+  const b1 = ym(s.me.birth);
+  const b2 = sp ? ym(s.spouse.birth) : NaN;
+  const ageOk = (b) => isFinite(b) && NOW - b >= 16 * 12 && NOW - b <= 80 * 12;
+  if (!ageOk(b1)) errs.push("你的出生日期要让年龄在 16 到 80 岁之间。");
+  if (sp && !ageOk(b2)) errs.push("伴侣的出生日期要让年龄在 16 到 80 岁之间。");
+  if (errs.length) return errs;
+  const st1 = statutory(b1, s.me.gender);
+  const st2 = sp ? statutory(b2, s.spouse.gender) : null;
+  const s1 = ym(s.stopMe);
+  if (!(s1 > NOW)) errs.push("计划提前退休的时间要晚于这个月。");
+  else if (s1 > st1.date) errs.push(`计划提前退休的时间不能晚于你的法定退休时间（${fmtYM(st1.date)}）。`);
+  else if (s.afterPension === "covered") {
+    const lp = st2 ? Math.max(st1.date, st2.date) : st1.date;
+    if (s1 >= lp) errs.push(`计划提前退休的时间要早于${sp ? "两人都开始领养老金" : "开始领养老金"}的时间（${fmtYM(lp)}）。`);
+  } else {
+    if (!Number.isInteger(s.endAge) || b1 + s.endAge * 12 <= s1) errs.push("“存款要撑到你几岁”要大于提前退休时的年龄。");
+    else if (b1 + s.endAge * 12 - NOW > 90 * 12) errs.push("规划时间太长了，请把“存款要撑到你几岁”改小一点。");
+  }
+  if (st2 && !s.together) {
+    const s2 = ym(s.stopSpouse);
+    if (!isFinite(s2)) errs.push("请选择伴侣提前退休的时间。");
+    else if (s2 > st2.date) errs.push(`伴侣提前退休的时间不能晚于伴侣的法定退休时间（${fmtYM(st2.date)}）。`);
+  }
+  if (s.hasMortgage && !isFinite(ym(s.mortEnd))) errs.push("请选择房贷最后一期的时间。");
+  if (s.hasKids) {
+    s.children.forEach((c, i) => {
+      const b = ym(c.date);
+      if (!isFinite(b)) errs.push(`请填写孩子 ${i + 1} 的${c.born ? "出生日期" : "计划出生时间"}。`);
+      else if (c.born && b > NOW) errs.push(`孩子 ${i + 1} 的出生日期不能晚于今天。`);
+      else if (!c.born && b < NOW) errs.push(`孩子 ${i + 1} 的计划出生时间要晚于现在；已经出生的请选“已出生”。`);
+    });
+  }
+  if (s.ret <= -50 || s.ret > 30) errs.push("投资收益请填 −50% 到 30% 之间的数。");
+  if (s.hasRent && !(s.rent >= 0)) errs.push("每月房租不能小于 0。");
+  if (s.outlook === "up" && !(s.upRate >= 0 && s.upRate <= 30)) errs.push("收入每年上涨请填 0% 到 30% 之间的数。");
+  if (s.outlook === "down" && !(s.downRate >= 0 && s.downRate <= 50)) errs.push("收入每年下降请填 0% 到 50% 之间的数。");
+  if (s.outlook === "unstable" && !(s.cutAge >= 18 && s.cutAge <= 70)) errs.push("收入减少的年龄请填 18 到 70 岁之间。");
+  if (s.outlook === "unstable" && !(s.cutPct >= 0 && s.cutPct <= 100)) errs.push("收入变成原来的比例请填 0% 到 100% 之间的数。");
+  if (s.stage.some((x) => x < 0)) errs.push("孩子的花费不能是负数。");
+  return errs;
+}
+
+function syncStops(s) {
+  const b1 = ym(s.me.birth);
+  const b2 = ym(s.spouse.birth);
+  if (isFinite(b1)) s.stopMe = ymStr(b1 + s.stopAgeMe * 12);
+  if (isFinite(b2)) s.stopSpouse = ymStr(b2 + s.stopAgeSpouse * 12);
+}
+
+const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+const str = (x) => (typeof x === "string" ? x : "");
+const numOr = (x, d) => (isNum(x) ? x : d);
+const LIST_NORMALIZERS = {
+  debts: (x) => ({ name: str(x.name), monthly: numOr(x.monthly, 0), end: str(x.end) }),
+  children: (x) => ({ born: !!x.born, date: str(x.date) }),
+  oneOffs: (x) => ({ name: str(x.name), date: str(x.date), amount: numOr(x.amount, 0), every: numOr(x.every, 0) }),
+  incomes: (x) => ({ name: str(x.name), monthly: numOr(x.monthly, 0), from: numOr(x.from, 0), to: numOr(x.to, 0) }),
+};
 
 function sanitize(raw) {
   const s = clone(DEFAULTS);
-  if (!raw || typeof raw !== "object") return s;
+  if (!isObj(raw)) return s;
   for (const k of Object.keys(s)) {
-    if (raw[k] !== undefined) s[k] = raw[k];
+    const d = s[k];
+    const v = raw[k];
+    if (v === undefined) continue;
+    if (Array.isArray(d)) {
+      if (!Array.isArray(v)) continue;
+      if (k === "stage") s[k] = d.map((x, i) => (isNum(v[i]) ? v[i] : x));
+      else s[k] = v.filter(isObj).map(LIST_NORMALIZERS[k] || ((x) => x));
+    } else if (isObj(d)) {
+      if (isObj(v)) s[k] = { ...d, ...v };
+    } else if (typeof d === typeof v) {
+      s[k] = v;
+    }
   }
-  // 备用金单位防御（避免万元与元混淆）
-  if (isNum(s.floor) && s.floor >= 1000) {
-    s.floor = Math.round(s.floor / 1e4);
+  for (const key of ["me", "spouse"]) {
+    s[key].birth = str(s[key].birth);
+    if (s[key].gender !== "male") s[key].gender = "female55";
   }
+  if (raw.rates !== "nominal") {
+    for (const k of ["ret", "eduGrowth"]) {
+      const v = raw[k];
+      if (isNum(v)) s[k] = Math.round(((1 + v / 100) * (1 + s.infl / 100) - 1) * 1000) / 10;
+    }
+  }
+  s.rates = "nominal";
+  const stopPairs = [
+    ["stopAgeMe", "stopMe", "me"],
+    ["stopAgeSpouse", "stopSpouse", "spouse"],
+  ];
+  for (const [ageKey, dateKey, who] of stopPairs) {
+    const b = ym(s[who].birth);
+    const d = ym(str(raw[dateKey]));
+    if (!isNum(raw[ageKey]) && isFinite(b) && isFinite(d)) s[ageKey] = Math.round((d - b) / 12);
+  }
+  if (isNum(s.floor) && s.floor >= 1000) s.floor = Math.round(s.floor / 1e4);
+  syncStops(s);
   return s;
 }
 
@@ -1940,6 +2123,21 @@ function renderResults() {
   renderHeaderPills();
   renderCompactDials();
 
+  const errors = validate(S);
+  if (errors.length) {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    box.innerHTML = `
+      <div class="bento-card" style="background:#fff1f2;">
+        <h2 style="margin:0 0 10px; font-size:18px; font-weight:900; color:#9f1239;">还有设置需要修改</h2>
+        <ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.9; color:#be123c; font-weight:700;">
+          ${errors.map((x) => `<li>${x}</li>`).join("")}
+        </ul>
+        <button type="button" class="btn-pill primary" style="margin-top:14px;" onclick="openFinanceModal()">去修改</button>
+      </div>
+    `;
+    return;
+  }
+
   const p = toParams(S, NOW);
   const a = analyze(p);
   const sp = p.sp;
@@ -1960,6 +2158,8 @@ function renderResults() {
   const plan = assetPath(p, a, p.livingWork);
   const minLine = isFinite(a.ceiling) ? assetPath(p, a, a.ceiling) : null;
   const ok = a.gap >= 0;
+  const planPct = a.need > 0 ? Math.max(0, (a.have / a.need) * 100) : 100;
+  const planCeil = isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? `${fmt(floor100(a.ceiling))} 元/月` : null;
   const ageAt = (t, b = p.b1) => Math.floor((NOW + t - b) / 12);
   const eShort = (e) => (e != null ? `${shortYM(NOW + e)} · ${ageAt(e)} 岁` : "75 岁后");
 
@@ -1976,23 +2176,38 @@ function renderResults() {
     targetDate = mDate;
   }
 
-  // 4 个关键事实
-  const nowIn = [];
-  nowIn.push(["你的工资", S.inc1]);
-  if (sp && S.inc2) nowIn.push(["伴侣工资", S.inc2]);
-  if (S.bonus1) nowIn.push(["你的年终奖(摊到月)", Math.round((S.bonus1 * 1e4) / 12)]);
-  if (sp && S.bonus2) nowIn.push(["伴侣年终奖", Math.round((S.bonus2 * 1e4) / 12)]);
+  // 4 个关键事实（与桌面端 report.ts 口径一致）
+  const r0 = a.rows[0];
+  const debtNow = S.debts.filter((d) => ym(d.end) >= NOW).reduce((acc, d) => acc + (+d.monthly || 0), 0);
+  const nowIn = [
+    [sp ? "两人到手工资" : "到手工资", r0.salary],
+    ["年终奖（按月摊）", r0.bonus],
+    ["公积金冲抵房贷", r0.hf],
+    ["其他收入", r0.other],
+  ].filter(([, v]) => v > 0.5);
   const inSum = nowIn.reduce((sum, [, v]) => sum + v, 0);
 
-  const nowOut = [];
-  nowOut.push(["日常开支", S.livingWork]);
-  if (S.hasRent) nowOut.push(["房租", S.rent]);
-  if (S.hasMortgage) nowOut.push(["房贷", S.mortMonthly]);
+  const nowOut = [
+    ["家庭日常开支", a.T > 0 ? spend : r0.living],
+    ["房租", r0.rent],
+    ["房贷月供", p.mortEnd >= 0 ? S.mortMonthly : 0],
+    ["其他负债", debtNow],
+    ["孩子", r0.child - r0.childBirth],
+    ["自己交的社保医保", r0.med + r0.si],
+  ].filter(([, v]) => v > 0.5);
   const outSum = nowOut.reduce((sum, [, v]) => sum + v, 0);
   const save = inSum - outSum;
 
+  const soon = [];
+  for (const o of p.oneOffs) {
+    for (let t = 0; t < 12; t++) if (oneOffAt(o, t)) soon.push(`${o.name} ${wan(o.amount)}（${shortYM(NOW + t)}）`);
+  }
+  const planned = p.children.filter((c) => !c.born && c.b >= 0).map((c) => fmtYM(NOW + c.b));
+
   const bridge = p.lastP - p.T1;
-  const pensionTotal = (a.sim.pen1 || p.pension1) + (sp ? (a.sim.pen2 || p.pension2) : 0);
+  const pensionTotal = a.sim.pen1 + a.sim.pen2;
+  const pensionShort = S.livingBridge - pensionTotal;
+  const formula = S.pensionMode === "formula";
 
   let low = p.T1;
   for (let t = p.T1; t <= Math.min(a.E, plan.length - 1); t++) if (plan[t] < plan[low]) low = t;
@@ -2002,21 +2217,27 @@ function renderResults() {
   const activeLever = levers.find((l) => l.id === activeLeverId);
 
   // 资产检查点
+  const stopY = Math.floor(stopIdx / 12);
+  const stepY = stopY - THIS_YEAR > 12 ? 2 : 1;
   const checkpoints = [];
-  for (let t = 0; t <= a.E; t += 24) checkpoints.push(t);
-  if (!checkpoints.includes(p.T1)) checkpoints.push(p.T1);
-  checkpoints.sort((x, y) => x - y);
+  for (let y = THIS_YEAR + 1; y <= stopY; y++) {
+    const t = y * 12 - NOW;
+    if (t < p.T1 && (y - THIS_YEAR) % stepY === 0) checkpoints.push(t);
+  }
+  checkpoints.push(p.T1);
 
   // 提前退休后收支 Kv
+  const post = a.rows.slice(a.T);
+  const sumPost = (f) => post.reduce((x, r) => x + f(r), 0);
   const postTotals = {
-    living: a.rows.slice(a.T).reduce((x, r) => x + r.living, 0),
-    child: a.rows.slice(a.T).reduce((x, r) => x + r.child, 0),
-    mort: a.rows.slice(a.T).reduce((x, r) => x + r.mort + r.debt, 0),
-    si: a.rows.slice(a.T).reduce((x, r) => x + r.med + r.si, 0),
-    one: a.rows.slice(a.T).reduce((x, r) => x + r.one, 0),
-    pension: a.rows.slice(a.T).reduce((x, r) => x + r.pension, 0),
-    other: a.rows.slice(a.T).reduce((x, r) => x + r.other, 0),
-    work: a.rows.slice(a.T).reduce((x, r) => x + (r.working ? r.salary + r.bonus : 0), 0),
+    living: sumPost((r) => r.living),
+    child: sumPost((r) => r.child),
+    mort: sumPost((r) => r.mort + r.debt),
+    si: sumPost((r) => r.med + r.si),
+    one: sumPost((r) => r.one),
+    pension: sumPost((r) => r.pension),
+    other: sumPost((r) => r.other),
+    work: sumPost((r) => r.salary + r.bonus + r.hf),
   };
   const directTotal = postTotals.living + postTotals.child + postTotals.mort + postTotals.si + postTotals.one - postTotals.pension - postTotals.other - postTotals.work + p.floor;
 
@@ -2090,10 +2311,10 @@ function renderResults() {
             <div style="margin-top:14px;">
               <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text-3); margin-bottom:6px;">
                 <span>储备金达成进度</span>
-                <span>${(Math.max(0, a.have / a.need) * 100).toFixed(1)}%</span>
+                <span>${planPct.toFixed(1)}%</span>
               </div>
               <div style="height:10px; border-radius:999px; background:rgba(255,255,255,0.85); overflow:hidden;">
-                <div style="height:100%; border-radius:999px; background:${ok ? "var(--brand)" : "var(--rose)"}; width:${Math.min(100, Math.max(0, (a.have / a.need) * 100))}%;"></div>
+                <div style="height:100%; border-radius:999px; background:${ok ? "var(--brand)" : "var(--rose)"}; width:${Math.min(100, planPct)}%;"></div>
               </div>
             </div>
           </div>
@@ -2101,17 +2322,21 @@ function renderResults() {
           <div class="plan-rows">
             <div class="plan-row-item"><span class="plan-row-label">退休时需要储备</span><span class="plan-row-val">${wan(a.need)}</span></div>
             <div class="plan-row-item"><span class="plan-row-label">届时预计拥有</span><span class="plan-row-val ${a.have < 0 ? "danger" : ""}">${a.have >= 0 ? wan(a.have) : "撑不到那时"}</span></div>
-            <div class="plan-row-item"><span class="plan-row-label">${ok ? "在职月日常开销上限" : "若按计划退休，月开销需降至"}</span><span class="plan-row-val">${ceilText(a.ceiling)}</span></div>
+            <div class="plan-row-item"><span class="plan-row-label">${ok ? "在职月日常消费上限" : "若按计划退休，月消费需降至"}</span><span class="plan-row-val ${planCeil ? "" : "danger"}">${planCeil || "光省钱不够"}</span></div>
           </div>
         </div>
       </div>
 
-      <div class="safety-tip ${safe && safe.ceil >= spend ? "strong" : "warn"}">
-        ${safe && safe.ceil >= spend
-          ? `<b>抗风险能力极强</b>：即便在 ${a5} 岁后再也没有职场收入，按现有日常开支，存款也能安稳过渡至法定领取养老金。`
-          : `<b>万一在 ${a5} 岁后收入中断</b>：工作期间月日常开支建议控制在 <b>${fmt(Math.floor((safe ? safe.ceil : 0) / 500) * 500)} 元</b>以内，仍可如期达成退休。`
-        }
-      </div>
+      ${ok && safe ? `
+        <div class="safety-tip ${safe.ceil >= spend ? "strong" : "warn"}">
+          ${safe.ceil >= spend
+            ? `<b>抗风险能力极强</b>：即便在 ${a5} 岁后再也没有职场收入，按现有日常开支，存款也能安稳过渡至法定领取养老金。`
+            : floor100(safe.ceil) >= 1000
+              ? `<b>万一在 ${a5} 岁后收入中断</b>：工作期间月日常开支建议控制在 <b>${fmt(Math.floor(safe.ceil / 500) * 500)} 元</b>以内，仍可如期达成退休。`
+              : `<b>万一在 ${a5} 岁后失业</b>：靠节流难度较大，可考虑适当延后退休 1~2 年，或提前布局副业现金流。`
+          }
+        </div>
+      ` : ""}
     </div>
 
     <!-- 2. 4 个关键事实便当盒 (KeyFacts) -->
@@ -2230,8 +2455,8 @@ function renderResults() {
       </div>
       <div class="legend">
         <span><i style="background:#059669;"></i> 按每月花 ${fmt(spend)}</span>
-        ${minLine ? '<span><i style="background:#f59e0b;"></i> 最低警戒线</span>' : ""}
-        <span><i style="border-top:2px dashed #94a3b8; height:0; border-radius:0; width:14px; vertical-align:3px;"></i> 提前退休所需 ${wan(a.need)}</span>
+        ${minLine ? `<span><i style="background:#f59e0b;"></i> 最低警戒线（每月花 ${ceilText(a.ceiling)}）</span>` : ""}
+        <span><i style="border-top:2px dashed #94a3b8; height:0; border-radius:0; width:14px; vertical-align:3px;"></i> 提前退休时需要 ${wan(a.need)}</span>
       </div>
       <div class="chart-box" id="chart-path"></div>
 
@@ -2290,6 +2515,11 @@ function renderResults() {
               ${nowOut.map(([k, v]) => `<div style="display:flex; justify-content:space-between; font-size:12.5px; background:rgba(255,255,255,0.8); padding:8px 12px; border-radius:12px;"><span>${k}</span><b>${fmt(v)}</b></div>`).join("")}
             </div>
           </div>
+          ${soon.length || planned.length ? `
+            <p style="margin:18px 0 0; border-radius:16px; background:rgba(241,245,249,0.9); padding:12px 14px; font-size:12px; line-height:1.7; color:var(--text-3); font-weight:700;">
+              ${soon.length ? `未来 12 个月还有大额支出：${soon.join("、")}。` : ""}${planned.length ? `孩子预计 ${planned.join("、")} 出生，之后每月会多出孩子的花费。` : ""}
+            </p>
+          ` : ""}
         </div>
 
         <div style="background:#f8fafc; border-radius:24px; padding:24px; display:flex; flex-direction:column; justify-content:space-between; gap:16px;">
@@ -2299,25 +2529,33 @@ function renderResults() {
               <div style="display:flex; align-items:center; justify-content:space-between; background:#ffffff; padding:12px 16px; border-radius:18px;">
                 <div>
                   <b style="font-size:13.5px; display:block;">你</b>
-                  <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st1.date)} 起领（${ageTxt(p.st1.ageM)}）</span>
+                  <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st1.date)} 起领（${ageTxt(p.st1.ageM)}）${formula ? ` · 共交约 ${(a.sim.m1 / 12).toFixed(1)} 年` : ""}</span>
                 </div>
-                <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen1 || p.pension1)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
+                <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen1)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
               </div>
-              ${sp && p.st2 ? `
+              ${p.st2 ? `
                 <div style="display:flex; align-items:center; justify-content:space-between; background:#ffffff; padding:12px 16px; border-radius:18px;">
                   <div>
                     <b style="font-size:13.5px; display:block;">伴侣</b>
-                    <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st2.date)} 起领（${ageTxt(p.st2.ageM)}）</span>
+                    <span style="font-size:11.5px; color:var(--text-4);">${shortYM(p.st2.date)} 起领（${ageTxt(p.st2.ageM)}）${formula ? ` · 共交约 ${(a.sim.m2 / 12).toFixed(1)} 年` : ""}</span>
                   </div>
-                  <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen2 || p.pension2)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
+                  <b style="font-size:18px; color:#0f172a; font-variant-numeric:tabular-nums;">${fmt(a.sim.pen2)} <span style="font-size:11px; font-weight:600; color:var(--text-4);">元/月</span></b>
                 </div>
               ` : ""}
             </div>
           </div>
 
-          <p style="margin:0; font-size:12px; color:var(--text-4); line-height:1.6;">
-            按公式估算：上班月份算缴费年限，提前退休后不够最低年限的补齐。没算工资上涨与账户利息，测算偏保守。
-          </p>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <p style="margin:0; font-size:12px; color:var(--text-4); line-height:1.6;">
+              ${formula
+                ? `按公式估算：上班的月份都算缴费年限；提前退休后${S.siAfter === "continue" ? "自己接着交到领养老金" : "停交，不够最低年限的补够"}。最少要交 ${a.sim.minY1} 年${sp ? `（伴侣 ${a.sim.minY2} 年）` : ""}。退休越早，交的年数越少，养老金也越少。没算工资上涨和账户利息，偏保守。`
+                : "按你直接填的金额。"}
+            </p>
+            ${p.covered ? (pensionShort <= 0
+              ? `<p style="margin:0; border-radius:16px; background:rgba(209,250,229,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#064e3b; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，完全够覆盖提前退休后每月 <b>${fmt(S.livingBridge)}</b> 的日常开支。</p>`
+              : `<p style="margin:0; border-radius:16px; background:rgba(254,243,199,0.8); padding:12px 14px; font-size:12px; line-height:1.7; color:#78350f; font-weight:700;">${sp ? "两人合计" : "合计"}每月约 <b>${fmt(pensionTotal)}</b>，比提前退休后每月 <b>${fmt(S.livingBridge)}</b> 的日常开支少约 <b>${fmt(pensionShort)}</b>。领养老金时留下的 ${wan(p.floor)}能补这个差约 <b>${Math.floor(p.floor / (pensionShort * 12))}</b> 年；觉得不够，可以把备用金调高。</p>`
+            ) : ""}
+          </div>
         </div>
       </div>
     </div>
@@ -2343,21 +2581,25 @@ function renderResults() {
 
       <div style="margin-top:24px; padding-top:20px; border-top:1px solid #f1f5f9; display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
         <div style="background:#f8fafc; border-radius:24px; padding:20px;">
-          <h4 style="margin:0 0 14px; font-size:15px; font-weight:900;">${wan(a.need)} 是怎么来的</h4>
+          <h4 style="margin:0 0 4px; font-size:15px; font-weight:900;">${wan(a.need)} 是怎么来的</h4>
+          <p style="margin:0 0 14px; font-size:12px; color:var(--text-4); font-weight:600;">${shortYM(stopIdx)}–${shortYM(NOW + a.E - 1)} 合计测算</p>
           <div class="kv">
             <span class="k">日常开支</span><span class="v">${wan(postTotals.living)}</span>
-            ${postTotals.child > 0 ? `<span class="k">孩子</span><span class="v">${wan(postTotals.child)}</span>` : ""}
-            ${postTotals.mort > 0 ? `<span class="k">房贷和负债</span><span class="v">${wan(postTotals.mort)}</span>` : ""}
-            ${postTotals.si > 0 ? `<span class="k">社保医保</span><span class="v">${wan(postTotals.si)}</span>` : ""}
-            ${postTotals.one > 0 ? `<span class="k">大额支出</span><span class="v">${wan(postTotals.one)}</span>` : ""}
-            ${postTotals.pension > 0 ? `<span class="k">减：养老金</span><span class="v">−${wan(postTotals.pension)}</span>` : ""}
-            ${postTotals.other > 0 ? `<span class="k">减：其他收入</span><span class="v">−${wan(postTotals.other)}</span>` : ""}
-            ${postTotals.work > 0 ? `<span class="k">减：伴侣继续上班</span><span class="v">−${wan(postTotals.work)}</span>` : ""}
-            <span class="k">最后还要剩下安全备用金</span><span class="v">${wan(p.floor)}</span>
+            ${postTotals.child > 0 ? `<span class="k">孩子培养花费</span><span class="v">${wan(postTotals.child)}</span>` : ""}
+            ${postTotals.mort > 0 ? `<span class="k">剩下的房贷和负债</span><span class="v">${wan(postTotals.mort)}</span>` : ""}
+            ${postTotals.si > 0 ? `<span class="k">自己交的社保医保</span><span class="v">${wan(postTotals.si)}</span>` : ""}
+            ${postTotals.one > 0 ? `<span class="k">大额一次性支出</span><span class="v">${wan(postTotals.one)}</span>` : ""}
+            ${postTotals.pension > 0 ? `<span class="k">减：养老金托底</span><span class="v">−${wan(postTotals.pension)}</span>` : ""}
+            ${postTotals.other > 0 ? `<span class="k">减：其他副业收入</span><span class="v">−${wan(postTotals.other)}</span>` : ""}
+            ${postTotals.work > 0 ? `<span class="k">减：伴侣继续上班的收入</span><span class="v">−${wan(postTotals.work)}</span>` : ""}
+            <span class="k">${p.covered ? `${fmtYM(NOW + p.lastP)} 领养老金时还要剩下` : "最后还要剩下"}</span><span class="v">${wan(p.floor)}</span>
             <div class="sep"></div>
-            <span class="k" style="font-weight:900;">直接加总</span><span class="v" style="font-weight:900;">${wan(directTotal)}</span>
-            <span class="k" style="font-weight:900; color:var(--brand);">实际需要储备（考虑未花资金理财生息）</span><span class="v total" style="color:var(--brand); font-size:18px;">${wan(a.need)}</span>
+            <span class="k" style="font-weight:900;">直接加总金额</span><span class="v" style="font-weight:900;">${wan(directTotal)}</span>
+            <span class="k" style="font-weight:900; color:var(--brand);">实际需要（没花的钱在理财生息）</span><span class="v total" style="color:var(--brand); font-size:18px;">${wan(a.need)}</span>
           </div>
+          <p style="margin:14px 0 0; font-size:12px; color:var(--text-4); line-height:1.7; font-weight:600;">
+            实际需要的钱，是保证提前退休后每个月存款都不低于 ${wan(p.floor)}的最少金额。${p.covered ? "领养老金以后按养老金够日常生活，不再额外计入。" : ""}
+          </p>
         </div>
 
         <div style="background:#f8fafc; border-radius:24px; padding:20px;">
@@ -2375,7 +2617,7 @@ function renderResults() {
     </div>
 
     <!-- 8. 工作风险分析 -->
-    <div class="bento-card bento-section">
+    ${jobAges.length ? `<div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
         <div>
@@ -2389,7 +2631,7 @@ function renderResults() {
         <span><i style="border-top:2px dashed #94a3b8; height:0; border-radius:0; width:14px; vertical-align:3px;"></i> 现在的月开销 ${fmt(spend)}</span>
       </div>
       <div class="chart-box" id="chart-job"></div>
-    </div>
+    </div>` : ""}
 
     <!-- 9. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
@@ -2572,12 +2814,12 @@ function drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm) {
   });
 
   const jobBox = document.getElementById("chart-job");
-  if (jobBox) {
+  if (jobBox && jobAges.length) {
     groupedBars(jobBox, {
       cats: jobAges.map((x) => ({ label: `${x} 岁`, title: `你 ${x} 岁失业` })),
       series: [
-        { name: "1 年后收入减半", color: "#059669", values: lossHalf.map((v) => (isFinite(v) ? floor100(v) : 0)) },
-        { name: "再也找不到工作", color: "#f59e0b", values: lossPerm.map((v) => (isFinite(v) ? floor100(v) : 0)) },
+        { name: "1 年后收入减半", color: "#059669", values: lossHalf.map((v) => (isFinite(v) ? Math.max(0, floor100(v)) : 0)) },
+        { name: "再也找不到工作", color: "#f59e0b", values: lossPerm.map((v) => (isFinite(v) ? Math.max(0, floor100(v)) : 0)) },
       ],
       ref: { value: S.livingWork },
     });
@@ -3292,13 +3534,6 @@ function renderModalContent() {
       </div>
     `;
   }
-}
-
-function syncStops(s) {
-  const b1 = ym(s.me.birth);
-  const b2 = ym(s.spouse.birth);
-  if (isFinite(b1)) s.stopMe = ymStr(b1 + s.stopAgeMe * 12);
-  if (isFinite(b2)) s.stopSpouse = ymStr(b2 + s.stopAgeSpouse * 12);
 }
 
 // 统一数据变更同步并刷新界面
