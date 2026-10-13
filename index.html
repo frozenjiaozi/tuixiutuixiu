@@ -517,10 +517,11 @@
     color: var(--plan-title);
   }
   /* 主数字：退休时需要准备的存款，右边是届时预计拥有 */
-  .plan-need-row { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: 40px; row-gap: 16px; }
+  .plan-need-row { margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
   .plan-need-row > div { min-width: 0; }
+  .plan-need-row > div + div { padding-left: 16px; border-left: 1px solid transparent; }
   .plan-need-label { margin: 0; font-size: 13px; font-weight: 700; color: var(--plan-label); }
-  .plan-need-val { margin: 2px 0 0; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+  .plan-need-val { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; font-variant-numeric: tabular-nums; }
   .plan-panel.ok .plan-need-val { color: #065f46; }
   .plan-panel.fail .plan-need-val { color: #881337; }
   .plan-panel .plan-need-val.have { color: #0d9488; }
@@ -983,7 +984,8 @@
       border-radius: 22px;
       padding: 16px 14px;
     }
-    .plan-need-row { margin-top: 16px; column-gap: 28px; }
+    .plan-need-row { margin-top: 16px; }
+    .plan-need-row > div + div { padding-left: 12px; }
     .plan-need-val b { font-size: 44px; }
     .plan-need-val span { font-size: 17px; }
     .plan-stats { margin-top: 16px; padding-top: 14px; }
