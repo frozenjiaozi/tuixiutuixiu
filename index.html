@@ -1929,7 +1929,7 @@ const formEl = document.getElementById("form");
 function renderForm() {
   LIVE = new Map();
   formEl.innerHTML =
-    `<div class="form-head"><div class="form-title">填写你的情况</div><p>按分类填写，右边的结果会实时更新。数据只保存在这台设备的浏览器里。</p></div>` +
+    `<div class="form-head"><div class="form-title">填写你的情况</div><p>按分类填写，右边的结果会实时更新。填过的内容自动保存在这个浏览器里，下次打开不用重填；不会上传到任何地方。</p></div>` +
     CATS.map((c, i) => {
       const open = OPEN.has(c.id);
       return `<div class="cat${open ? " open" : ""}" data-cat="${c.id}">
