@@ -379,6 +379,16 @@
     font-size: 12.5px;
     font-weight: 550;
   }
+  .seg-full {
+    display: flex;
+    width: 100%;
+    margin-bottom: 14px;
+  }
+  .seg-full button {
+    flex: 1;
+    padding: 7px 0;
+    font-size: 13.5px;
+  }
   .seg-sm button.on {
     background: var(--brand);
     color: #ffffff;
@@ -1148,14 +1158,14 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>FIRE 提前退休自由度测算</h1>
-          <div class="sub">动态模拟家庭资产积累与通胀现金流，测算你的退休自由时刻与财务安全垫</div>
+          <h1>提前退休计算器</h1>
+          <div class="sub">填好家庭的收入、开销和负债，算出你最早什么时候能提前退休，以及工作期间每月最多能花多少</div>
         </div>
       </div>
       <div class="actions">
         <button class="btn" id="btn-export">
           <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          导出配置
+          导出数据
         </button>
         <button class="btn" id="btn-import">
           <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
@@ -1453,7 +1463,7 @@ function scenarioList(p) {
     }
   }
   list.push({ id: "r-1", name: "投资收益每年少 1 个百分点", job: false, p: { ...p, r: p.r - 0.01 } });
-  list.push({ id: "spend+1000", name: "停工后每月多花 1,000", job: false, p: { ...p, livingBridge: p.livingBridge + 1000, livingPension: p.livingPension + 1000 } });
+  list.push({ id: "spend+1000", name: "提前退休后每月多花 1,000", job: false, p: { ...p, livingBridge: p.livingBridge + 1000, livingPension: p.livingPension + 1000 } });
   if (p.covered) {
     list.push({
       id: "pension+2",
@@ -1464,8 +1474,8 @@ function scenarioList(p) {
   } else {
     list.push({ id: "live+5", name: `多活 5 年（存款撑到 ${p.endAge + 5} 岁）`, job: false, p: { ...p, E: p.E + 60 } });
   }
-  list.push({ id: "later1", name: `晚 1 年停工（${fmtYM(p.now + p.T1 + 12)}）`, job: false, p: withStop(p, p.T1 + 12) });
-  if (p.T1 - 12 >= 1) list.push({ id: "earlier1", name: `早 1 年停工（${fmtYM(p.now + p.T1 - 12)}）`, job: false, p: withStop(p, p.T1 - 12) });
+  list.push({ id: "later1", name: `晚 1 年退休（${fmtYM(p.now + p.T1 + 12)}）`, job: false, p: withStop(p, p.T1 + 12) });
+  if (p.T1 - 12 >= 1) list.push({ id: "earlier1", name: `早 1 年退休（${fmtYM(p.now + p.T1 - 12)}）`, job: false, p: withStop(p, p.T1 - 12) });
   return list;
 }
 </script>
@@ -1648,7 +1658,7 @@ function bodyBasic() {
   const stopInfo = () => {
     const b1 = birthOf("me"), st1 = statOf("me"), s1 = ym(S.stopMe);
     if (!st1 || !isFinite(s1)) return "";
-    if (s1 <= NOW) return derived("停工时间要晚于这个月。", true);
+    if (s1 <= NOW) return derived("提前退休的时间要晚于这个月。", true);
     if (s1 > st1.date) return derived(`已经晚于你的法定退休时间（${fmtYM(st1.date)}），请往前选。`, true);
     if (s1 === st1.date) return derived("这就是你的法定退休时间，不算提前退休。", true);
     return derived(`那时你 <b>${ageTxt(s1 - b1)}</b>，比法定退休早 <b>${durTxt(st1.date - s1)}</b>，这段时间要靠存款过。`);
@@ -1662,16 +1672,19 @@ function bodyBasic() {
   };
   let spouseStop = "";
   if (sp) {
-    spouseStop = toggle("together", "伴侣和你同一个月停工");
+    spouseStop = toggle("together", "伴侣和你同一个月提前退休");
     if (!S.together) {
-      spouseStop += ymField("stopSpouse", "伴侣计划哪个月停工", thisYear, thisYear + 50, "伴侣现在没有工作的话，选这个月就行") + live("stop-spouse", spouseInfo);
+      spouseStop += ymField("stopSpouse", "伴侣计划哪个月提前退休", thisYear, thisYear + 50, "伴侣现在没有工作的话，选这个月就行") + live("stop-spouse", spouseInfo);
     }
   }
-  return `${personHTML("me", "你")}
-    ${toggle("hasSpouse", "和伴侣一起规划")}
+  return `<div class="field"><label>婚姻状况</label><div class="seg-sm seg-full" role="group" aria-label="婚姻状况">
+      <button type="button" class="${sp ? "" : "on"}" data-action="marital" data-v="0" aria-pressed="${!sp}">单身</button>
+      <button type="button" class="${sp ? "on" : ""}" data-action="marital" data-v="1" aria-pressed="${sp}">已婚</button>
+    </div></div>
+    ${personHTML("me", "你")}
     ${sp ? personHTML("spouse", "伴侣") : ""}
-    <div class="sub-title">什么时候停止工作</div>
-    ${ymField("stopMe", "你计划哪个月停止工作", thisYear, thisYear + 50)}
+    <div class="sub-title">计划什么时候提前退休</div>
+    ${ymField("stopMe", "你计划哪个月提前退休", thisYear, thisYear + 50)}
     ${live("stop-me", stopInfo)}
     ${spouseStop}
     <div class="sub-title">存款</div>
@@ -1683,7 +1696,7 @@ function bodyIncome() {
   return `${two(num("inc1", "你每月到手", "元"), num("bonus1", "你的年终奖", "万/年"))}
     ${sp ? two(num("inc2", "伴侣每月到手", "元"), num("bonus2", "伴侣的年终奖", "万/年")) : ""}
     ${num("incGrowth", "收入每年比物价多涨", "%", { hint: "保守可以填 0" })}
-    <div class="hint" style="margin-top:-4px">都按税后到手填，停工后工资和年终奖都没有了。公积金在“负债 → 房贷”里填；房租、兼职等其他收入在“高级设置”里填。</div>`;
+    <div class="hint" style="margin-top:-4px">都按税后到手填，提前退休后工资和年终奖都没有了。公积金在“负债 → 房贷”里填；房租、兼职等其他收入在“高级设置”里填。</div>`;
 }
 
 function leftInfo(path) {
@@ -1722,10 +1735,10 @@ function bodySpend() {
   const bridge = () => {
     const s1 = ym(S.stopMe), lp = lastPensionDate();
     if (!isFinite(s1) || !isFinite(lp) || lp <= s1) return "";
-    return derived(`从停工到${S.hasSpouse ? "两人都" : ""}领养老金，约 <b>${durTxt(lp - s1)}</b>（${fmtYM(s1)} 到 ${fmtYM(lp)}）。`);
+    return derived(`从提前退休到${S.hasSpouse ? "两人都" : ""}领养老金，约 <b>${durTxt(lp - s1)}</b>（${fmtYM(s1)} 到 ${fmtYM(lp)}）。`);
   };
   return `${num("livingWork", "现在每月开销", "元", { hint: "家庭日常开销，租房的话含房租；不含房贷、其他负债和孩子" })}
-    ${num("livingBridge", "停工后到领养老金前，每月开销", "元", { hint: "提前退休这段时间的日常开销。社保医保另外算，不用算在这里" })}
+    ${num("livingBridge", "提前退休后到领养老金前，每月开销", "元", { hint: "提前退休这段时间的日常开销。社保医保另外算，不用算在这里" })}
     ${live("bridge", bridge)}
     ${
       S.afterPension === "model"
@@ -1840,12 +1853,12 @@ function bodyAdv() {
     const a = statOf("me"), b = sp ? statOf("spouse") : null;
     if (!a) return "";
     const one = (who, st) => `${who} ${Math.floor(st.date / 12)} 年领，最少要交 <b>${minYearsAt(st.date)} 年</b>`;
-    return derived(`${one("你", a)}${b ? `；${one("伴侣", b)}` : ""}。按规定，最低缴费年限 2030 年起每年加半年，2039 年起为 20 年；不够的会按停工后自己交补够。`);
+    return derived(`${one("你", a)}${b ? `；${one("伴侣", b)}` : ""}。按规定，最低缴费年限 2030 年起每年加半年，2039 年起为 20 年；不够的会在提前退休后自己交补够。`);
   };
   return `<div class="sub-title">投资和备用金</div>
     ${two(num("ret", "投资每年收益", "%"), num("infl", "每年通胀", "%"))}
     <div class="hint" style="margin:-8px 0 12px">投资收益按扣除通胀以后的实际收益填。</div>
-    ${num("floor", "停工后至少留的备用金", "万", { hint: "应急金、父母备用金等。停工期间存款任何时候都不低于这个数，领养老金时还剩这么多" })}
+    ${num("floor", "提前退休后至少留的备用金", "万", { hint: "应急金、父母备用金等。提前退休期间存款任何时候都不低于这个数，领养老金时还剩这么多" })}
     ${select("afterPension", "领养老金以后", [["covered", "养老金够日常生活，存款只撑到领养老金"], ["model", "按实际养老金算，存款撑到指定年龄"]])}
     ${S.afterPension === "model" ? num("endAge", "存款要撑到你几岁", "岁", { kind: "int" }) : ""}
     <div class="sub-title">社保和养老金</div>
@@ -1859,9 +1872,9 @@ function bodyAdv() {
       ${live("min-years", minInfo)}`
         : two(num("pension1", "你每月养老金", "元"), sp ? num("pension2", "伴侣每月养老金", "元") : "")
     }
-    ${select("siAfter", "停工后养老保险", [["stop", "停交（不够最低年限就补够）"], ["continue", "自己交到领养老金"]])}
+    ${select("siAfter", "提前退休后的养老保险", [["stop", "停交（不够最低年限就补够）"], ["continue", "自己交到领养老金"]])}
     ${num("flexPension", "自己交养老保险，每人每月", "元", { hint: "按当地灵活就业人员的最低档填" })}
-    ${num("med", "停工后自己交医保，每人每月", "元", { hint: "交到领养老金为止；按当地灵活就业人员职工医保的标准填" })}
+    ${num("med", "提前退休后自己交医保，每人每月", "元", { hint: "交到领养老金为止；按当地灵活就业人员职工医保的标准填" })}
     <div class="sub-title">其他收入</div>
     ${renderIncomes()}
     <div class="sub-title">职业风险（放进计划里）</div>
@@ -1876,7 +1889,7 @@ const CATS = [
       if (!isFinite(b1)) return "先填出生日期";
       const parts = [`你 ${Math.floor((NOW - b1) / 12)} 岁`];
       if (S.hasSpouse && isFinite(birthOf("spouse"))) parts.push(`伴侣 ${Math.floor((NOW - birthOf("spouse")) / 12)} 岁`);
-      if (isFinite(s1)) parts.push(`${shortYM(s1)} 停工`);
+      if (isFinite(s1)) parts.push(`${shortYM(s1)} 提前退休`);
       parts.push(`存款 ${S.assets} 万`);
       return parts.join(" · ");
     },
@@ -1897,7 +1910,7 @@ const CATS = [
       return parts.join(" · ");
     },
   },
-  { id: "spend", title: "开销信息", body: bodySpend, sum: () => `现在 ${fmt(S.livingWork)} · 停工后 ${fmt(S.livingBridge)} 元/月` },
+  { id: "spend", title: "开销信息", body: bodySpend, sum: () => `现在 ${fmt(S.livingWork)} · 提前退休后 ${fmt(S.livingBridge)} 元/月` },
   {
     id: "kids", title: "抚养孩子", body: bodyKids,
     sum() {
@@ -2026,6 +2039,10 @@ formEl.addEventListener("click", (e) => {
     const t = ym(c.date);
     c.born = born;
     c.date = born ? `${ymStr(isFinite(t) && t <= NOW ? t : NOW)}-01` : ymStr(isFinite(t) && t > NOW ? t : NOW + 12);
+  } else if (act === "marital") {
+    const v = b.dataset.v === "1";
+    if (S.hasSpouse === v) return;
+    S.hasSpouse = v;
   } else if (act === "preset") {
     S.oneOffs.push(presetItem(b.dataset.k));
   } else if (list === "children") {
@@ -2079,19 +2096,19 @@ function validate(s) {
   if (errs.length) return errs;
   const st1 = statutory(b1, s.me.gender), st2 = sp ? statutory(b2, s.spouse.gender) : null;
   const s1 = ym(s.stopMe);
-  if (!(s1 > NOW)) errs.push("计划停工的时间要晚于这个月。");
-  else if (s1 > st1.date) errs.push(`计划停工的时间不能晚于你的法定退休时间（${fmtYM(st1.date)}）。`);
+  if (!(s1 > NOW)) errs.push("计划提前退休的时间要晚于这个月。");
+  else if (s1 > st1.date) errs.push(`计划提前退休的时间不能晚于你的法定退休时间（${fmtYM(st1.date)}）。`);
   else if (s.afterPension === "covered") {
     const lp = sp ? Math.max(st1.date, st2.date) : st1.date;
-    if (s1 >= lp) errs.push(`计划停工的时间要早于${sp ? "两人都开始领养老金" : "开始领养老金"}的时间（${fmtYM(lp)}）。`);
+    if (s1 >= lp) errs.push(`计划提前退休的时间要早于${sp ? "两人都开始领养老金" : "开始领养老金"}的时间（${fmtYM(lp)}）。`);
   } else {
-    if (!Number.isInteger(s.endAge) || b1 + s.endAge * 12 <= s1) errs.push("“存款要撑到你几岁”要大于停工时的年龄。");
+    if (!Number.isInteger(s.endAge) || b1 + s.endAge * 12 <= s1) errs.push("“存款要撑到你几岁”要大于提前退休时的年龄。");
     else if (b1 + s.endAge * 12 - NOW > 90 * 12) errs.push("规划时间太长了，请把“存款要撑到你几岁”改小一点。");
   }
   if (sp && !s.together) {
     const s2 = ym(s.stopSpouse);
-    if (!isFinite(s2)) errs.push("请选择伴侣的停工时间。");
-    else if (s2 > st2.date) errs.push(`伴侣的停工时间不能晚于伴侣的法定退休时间（${fmtYM(st2.date)}）。`);
+    if (!isFinite(s2)) errs.push("请选择伴侣提前退休的时间。");
+    else if (s2 > st2.date) errs.push(`伴侣提前退休的时间不能晚于伴侣的法定退休时间（${fmtYM(st2.date)}）。`);
   }
   if (s.hasMortgage && !isFinite(ym(s.mortEnd))) errs.push("请选择房贷最后一期的时间。");
   if (s.hasKids) {
@@ -2322,23 +2339,23 @@ function renderResults() {
   if (ok) {
     concl = `<div class="callout success">
       <div class="callout-header">
-        <span class="status-badge success"><i class="dot"></i> 目标可行 · 储备充裕</span>
-        <span class="pill success">${stopAge}开启退休自由</span>
+        <span class="status-badge success"><i class="dot"></i> 计划可行</span>
+        <span class="pill success">${stopAge}提前退休</span>
       </div>
       <div class="callout-body">
-        <h3>按当前开销规划，${fmtYM(stopIdx)}（${stopAge}）即可停止工作</h3>
-        <p class="callout-lead">停工时规划需备用资金约 <b>${wan(a.need)}</b>；工作期间家庭日常每月开销 <b>${fmt(spend)} 元</b>，届时预计可累积达 <b>${wan(a.have)}</b>，拥有 <b>${wan(a.gap)}</b> 的稳健安全垫。</p>
+        <h3>按当前开销，${fmtYM(stopIdx)}（${stopAge}）可以提前退休</h3>
+        <p class="callout-lead">提前退休时需要存款约 <b>${wan(a.need)}</b>。工作期间每月日常开销 <b>${fmt(spend)} 元</b>的话，到时会有 <b>${wan(a.have)}</b>，安全垫 <b>${wan(a.gap)}</b>。</p>
         <div class="callout-pills">
-          <div class="c-pill"><span>工作期每月开销安全线</span><b>${ceilText(a.ceiling)}</b></div>
-          ${safe ? `<div class="c-pill"><span>中年失业防护上限</span><b>${ceilText(safe.ceil)}</b></div>` : ""}
+          <div class="c-pill"><span>工作期间每月最多能花</span><b>${ceilText(a.ceiling)}</b></div>
+          ${safe ? `<div class="c-pill"><span>${a5} 岁后失业也够用，每月最多能花</span><b>${ceilText(safe.ceil)}</b></div>` : ""}
         </div>
         ${
           safe
             ? safe.ceil >= spend
-              ? `<p class="callout-foot">🛡️ <b>抗风险韧性强</b>：按目前的日常开销，即使你 ${a5} 岁后收入归零，现有资产积累也能安稳承托至领养老金。</p>`
+              ? `<p class="callout-foot">🛡️ <b>抗风险能力强</b>：按现在的日常开销，就算你 ${a5} 岁后再也没有收入，存款也能撑到领养老金。</p>`
               : floor100(safe.ceil) >= 1000
-                ? `<p class="callout-foot">⚠️ <b>防御型建议</b>：若希望完全抗住“${a5} 岁后无收入”的极端风险，建议工作期间每月开销控制在 <b>${fmt(Math.floor(safe.ceil / 500) * 500)} 元</b> 以内。</p>`
-                : `<p class="callout-foot">💡 <b>规划提示</b>：“${a5} 岁后无收入”若发生，单靠当前节流较难覆盖，建议结合适当推迟停工时间或补充停工后的副业收入。</p>`
+                ? `<p class="callout-foot">⚠️ <b>想扛住风险</b>：如果希望“${a5} 岁后再也没有收入”时也够用，工作期间每月开销要控制在 <b>${fmt(Math.floor(safe.ceil / 500) * 500)} 元</b> 以内。</p>`
+                : `<p class="callout-foot">💡 <b>风险提示</b>：万一“${a5} 岁后再也没有收入”，光靠省钱很难扛住，可以考虑晚一点退休，或者准备退休后的副业收入。</p>`
             : ""
         }
       </div>
@@ -2346,17 +2363,17 @@ function renderResults() {
   } else {
     concl = `<div class="callout danger">
       <div class="callout-header">
-        <span class="status-badge danger"><i class="dot"></i> 暂未达成 · 存在差距</span>
+        <span class="status-badge danger"><i class="dot"></i> 计划还有缺口</span>
         <span class="pill danger">缺口约 ${wan(-a.gap)}</span>
       </div>
       <div class="callout-body">
-        <h3>按当前设定，${fmtYM(stopIdx)}（${stopAge}）停工尚存在约 ${wan(-a.gap)} 的资产缺口</h3>
-        <p class="callout-lead">停工时需要储备约 <b>${wan(a.need)}</b>；按工作期每月开销 <b>${fmt(spend)} 元</b>测算，${
-          a.have >= 0 ? `届时预计积累 <b>${wan(a.have)}</b>` : "现有储蓄撑不到停工的时候"
+        <h3>按当前设定，${fmtYM(stopIdx)}（${stopAge}）提前退休还缺约 ${wan(-a.gap)}</h3>
+        <p class="callout-lead">提前退休时需要存款约 <b>${wan(a.need)}</b>。工作期间每月日常开销 <b>${fmt(spend)} 元</b>的话，${
+          a.have >= 0 ? `到时只有 <b>${wan(a.have)}</b>` : "存款撑不到提前退休的时候"
         }。</p>
         <div class="callout-pills">
-          <div class="c-pill"><span>如期停工需将月开销压降至</span><b>${isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? ceilText(a.ceiling) : "需综合开源或推迟"}</b></div>
-          <div class="c-pill"><span>开销不变，最早能停工</span><b>${eLong(base.earliest)}</b></div>
+          <div class="c-pill"><span>想按时退休，每月开销要降到</span><b>${isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? ceilText(a.ceiling) : "光省钱不够，需要增收或晚点退休"}</b></div>
+          <div class="c-pill"><span>开销不变，最早能提前退休</span><b>${eLong(base.earliest)}</b></div>
         </div>
       </div>
     </div>`;
@@ -2390,8 +2407,8 @@ function renderResults() {
   const pensionCheck = !p.covered
     ? ""
     : pensionShort <= 0
-      ? `<p class="muted" style="margin:6px 0 0">${sp ? "两人合计" : "合计"}每月约 ${fmt(pm)}，够停工后每月 ${fmt(S.livingBridge)} 的开销。</p>`
-      : `<p style="margin:8px 0 0;font-size:13px;color:var(--warn)">${sp ? "两人合计" : "合计"}每月约 ${fmt(pm)}，比停工后每月 ${fmt(S.livingBridge)} 的开销少约 ${fmt(pensionShort)}。领养老金时留下的 ${wan(p.floor)}能补这个差约 ${Math.floor(p.floor / (pensionShort * 12))} 年；觉得不够，可以把备用金调高，或者在“高级设置”里把“领养老金以后”改成按实际养老金算。</p>`;
+      ? `<p class="muted" style="margin:6px 0 0">${sp ? "两人合计" : "合计"}每月约 ${fmt(pm)}，够提前退休后每月 ${fmt(S.livingBridge)} 的开销。</p>`
+      : `<p style="margin:8px 0 0;font-size:13px;color:var(--warn)">${sp ? "两人合计" : "合计"}每月约 ${fmt(pm)}，比提前退休后每月 ${fmt(S.livingBridge)} 的开销少约 ${fmt(pensionShort)}。领养老金时留下的 ${wan(p.floor)}能补这个差约 ${Math.floor(p.floor / (pensionShort * 12))} 年；觉得不够，可以把备用金调高，或者在“高级设置”里把“领养老金以后”改成按实际养老金算。</p>`;
   const penRow = (who, st, months, pen) =>
     `<span class="k">${who}：${fmtYM(st.date)} 起（${ageTxt(st.ageM)}），${formula ? `共交约 ${(months / 12).toFixed(1)} 年` : "直接填写"}</span><span class="v">每月约 ${fmt(pen)} 元</span>`;
   const pensionBox = `
@@ -2401,7 +2418,7 @@ function renderResults() {
     </div>
     <p class="muted" style="margin:8px 0 0">${
       formula
-        ? `按公式估算：上班的月份都算缴费年限；停工后${S.siAfter === "continue" ? "自己接着交到领养老金" : "停交，不够最低年限的补够"}。最少要交 ${a.sim.minY1} 年${sp ? `（伴侣 ${a.sim.minY2} 年）` : ""}。停工越早，交的年数越少，养老金也越少。没算工资上涨和账户利息，偏保守。`
+        ? `按公式估算：上班的月份都算缴费年限；提前退休后${S.siAfter === "continue" ? "自己接着交到领养老金" : "停交，不够最低年限的补够"}。最少要交 ${a.sim.minY1} 年${sp ? `（伴侣 ${a.sim.minY2} 年）` : ""}。退休越早，交的年数越少，养老金也越少。没算工资上涨和账户利息，偏保守。`
         : "按你直接填的金额。"
     }</p>${pensionCheck}`;
 
@@ -2431,18 +2448,18 @@ function renderResults() {
 
   box.innerHTML = `
   <div class="stats">
-    <div class="stat"><div class="v">${wan(a.need)}</div><div class="l">${shortYM(stopIdx)} 停工时需要的存款</div></div>
-    <div class="stat"><div class="v">${wan(a.have)}</div><div class="l">每月花 ${fmt(spend)}，停工时会有</div></div>
+    <div class="stat"><div class="v">${wan(a.need)}</div><div class="l">${shortYM(stopIdx)} 提前退休时需要的存款</div></div>
+    <div class="stat"><div class="v">${wan(a.have)}</div><div class="l">每月花 ${fmt(spend)}，到时会有</div></div>
     <div class="stat ${ok ? "good" : "bad"}"><div class="v">${signedWan(a.gap)}</div><div class="l">${ok ? "安全垫" : "缺口"}</div></div>
     <div class="stat"><div class="v">${isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? fmt(floor100(a.ceiling)) : "—"}</div><div class="l">工作期间每月最多能花（元）</div></div>
-    <div class="stat"><div class="v">${base.earliest != null ? shortYM(NOW + base.earliest) : "—"}</div><div class="l">${base.earliest != null ? `按现在的开销最早能停工（${ageTxt(NOW + base.earliest - p.b1)}）` : "按现在的开销，75 岁前都不行"}</div></div>
+    <div class="stat"><div class="v">${base.earliest != null ? shortYM(NOW + base.earliest) : "—"}</div><div class="l">${base.earliest != null ? `按现在的开销，最早能提前退休（${ageTxt(NOW + base.earliest - p.b1)}）` : "按现在的开销，75 岁前都不行"}</div></div>
   </div>
   ${concl}
   <p class="muted">${
     p.covered
       ? `按“养老金够日常生活”算：存款只需撑到 ${fmtYM(NOW + p.lastP)}${sp ? "（两人都开始领养老金）" : "（开始领养老金）"}，那时还剩 ${wan(p.floor)}备用金。`
       : `存款按实际养老金一直算到你 ${p.endAge} 岁。`
-  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。停工时需要的 ${wan(a.need)}，按每年 ${S.infl}% 通胀相当于那时的约 ${wan(a.need * Math.pow(1 + p.infl, p.T1 / 12))}。${shocked ? "已按你在“高级设置”里填的职业风险计算。" : ""}</p>
+  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。提前退休时需要的 ${wan(a.need)}，按每年 ${S.infl}% 通胀相当于那时的约 ${wan(a.need * Math.pow(1 + p.infl, p.T1 / 12))}。${shocked ? "已按你在“高级设置”里填的职业风险计算。" : ""}</p>
 
   <section>
     <h2>现在每月的钱</h2>
@@ -2468,7 +2485,7 @@ function renderResults() {
     jobAges.length
       ? `<section>
     <h2>工作风险：失业越早，能花的越少</h2>
-    <p>下图是你在不同年龄失业时，工作期间每月最多能花多少${sp ? "（伴侣照常上班）" : ""}。柱子高过虚线，说明按每月 ${fmt(spend)} 花，那种情况下 ${fmtYM(stopIdx)} 停工仍然够。</p>
+    <p>下图是你在不同年龄失业时，工作期间每月最多能花多少${sp ? "（伴侣照常上班）" : ""}。柱子高过虚线，说明按每月 ${fmt(spend)} 花，那种情况下 ${fmtYM(stopIdx)} 提前退休仍然够。</p>
     <div class="card">
       <div class="legend">
         <span><i style="background:var(--info)"></i>失业 1 年后，找到收入减半的工作</span>
@@ -2486,14 +2503,14 @@ function renderResults() {
     <h2>压力测试</h2>
     <div class="card tbl">
       <table>
-        <thead><tr><th>情况</th><th class="num">工作期间每月最多能花</th><th class="num">按每月 ${fmt(spend)} 花，停工时差额</th><th class="num">最早能停工</th></tr></thead>
+        <thead><tr><th>情况</th><th class="num">工作期间每月最多能花</th><th class="num">按每月 ${fmt(spend)} 花，安全垫 / 缺口</th><th class="num">最早能提前退休</th></tr></thead>
         <tbody>
           <tr class="group"><td colspan="4">职业情况（只换这一项）</td></tr>${stressRows(true)}
           <tr class="group"><td colspan="4">在当前设定上只改一项</td></tr>${stressRows(false)}
         </tbody>
       </table>
     </div>
-    <p class="muted" style="margin-top:6px"><span class="pill success">绿色</span> 多出 20 万以上 <span class="pill warn">黄色</span> 够，但余量不到 20 万 <span class="pill danger">红色</span> 不够。“当前设定”包含你在高级设置里填的职业风险；其他职业情况会替换掉它。</p>
+    <p class="muted" style="margin-top:6px"><span class="pill success">绿色</span> 安全垫 20 万以上 <span class="pill warn">黄色</span> 够，但安全垫不到 20 万 <span class="pill danger">红色</span> 有缺口。“当前设定”包含你在高级设置里填的职业风险；其他职业情况会替换掉它。</p>
   </section>
 
   <section>
@@ -2502,10 +2519,10 @@ function renderResults() {
       <div class="legend">
         <span><i style="background:var(--info)"></i>按每月花 ${fmt(spend)}</span>
         ${minLine ? `<span><i style="background:var(--warn)"></i>刚好够用的最低线（每月花 ${ceilText(a.ceiling)}）</span>` : ""}
-        <span><i class="dash"></i>停工时需要 ${wan(a.need)}</span>
+        <span><i class="dash"></i>提前退休时需要 ${wan(a.need)}</span>
       </div>
       <div class="chart-box" id="chart-path"></div>
-      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：存款（万元，今天的购买力）。阴影部分是停工以后。</p>
+      <p class="muted" style="margin:6px 0 0">横轴：你的年龄；纵轴：存款（万元，今天的购买力）。阴影部分是提前退休以后。</p>
     </div>
     <h3 style="margin-top:16px">对账的检查点</h3>
     <div class="card tbl">
@@ -2513,20 +2530,20 @@ function renderResults() {
         <thead><tr><th>时间</th>${minLine ? '<th class="num">最低线</th>' : ""}<th class="num">按每月花 ${fmt(spend)}</th><th class="num">换算成当时的钱</th></tr></thead>
         <tbody>${cps
           .map((t) => {
-            const lbl = t === p.T1 ? `${fmtYM(NOW + t)} 停工时（${stopAge}）` : `${fmtYM(NOW + t)}（你 ${ageAt(t)} 岁）`;
+            const lbl = t === p.T1 ? `${fmtYM(NOW + t)} 提前退休时（${stopAge}）` : `${fmtYM(NOW + t)}（你 ${ageAt(t)} 岁）`;
             return `<tr class="${t === p.T1 ? "strong" : ""}"><td>${lbl}</td>${minLine ? `<td class="num">${wan(minLine[t])}</td>` : ""}<td class="num">${wan(plan[t])}</td><td class="num">${wan(plan[t] * Math.pow(1 + p.infl, t / 12))}</td></tr>`;
           })
           .join("")}</tbody>
       </table>
     </div>
-    <p class="muted" style="margin-top:6px">账户里看到的是当时的钱，和最后一列比。连续两次低于最低线（同样换算成当时的钱），就要减少开销或推迟停工。</p>
+    <p class="muted" style="margin-top:6px">账户里看到的是当时的钱，和最后一列比。连续两次低于最低线（同样换算成当时的钱），就要减少开销或晚点退休。</p>
   </section>
 
   <section>
-    <h2>停工后每年的收支</h2>
+    <h2>提前退休后每年的收支</h2>
     <div class="card">
       <div class="legend">
-        <span><i style="background:var(--seg-living)"></i>生活费</span>
+        <span><i style="background:var(--seg-living)"></i>日常开销</span>
         <span><i style="background:var(--seg-child)"></i>孩子</span>
         <span><i style="background:var(--seg-mort)"></i>房贷和负债</span>
         <span><i style="background:var(--seg-si)"></i>社保医保</span>
@@ -2534,13 +2551,13 @@ function renderResults() {
         <span><i class="ln"></i>收入（养老金、其他收入${sp && !p.together ? "、伴侣工资" : ""}）</span>
       </div>
       <div class="chart-box" id="chart-post"></div>
-      <p class="muted" style="margin:6px 0 0">从停工那个月起每 12 个月一根柱子。横轴：你的年龄；纵轴：金额（万元，今天的购买力）。柱子高出线的部分要从存款里拿。房贷合同金额固定，按通胀折成今天的钱会越来越少。</p>
+      <p class="muted" style="margin:6px 0 0">从提前退休那个月起，每 12 个月一根柱子。横轴：你的年龄；纵轴：金额（万元，今天的购买力）。柱子高出线的部分要从存款里拿。房贷合同金额固定，按通胀折成今天的钱会越来越少。</p>
     </div>
     <div class="grid2" style="margin-top:14px">
       <div class="card">
         <h3>${wan(a.need)} 是怎么来的（${shortYM(stopIdx)}–${shortYM(NOW + a.E - 1)} 合计）</h3>
         <div class="kv">
-          <span class="k">生活费</span><span class="v">${wan(tLiving)}</span>
+          <span class="k">日常开销</span><span class="v">${wan(tLiving)}</span>
           ${tChild > 0 ? `<span class="k">孩子</span><span class="v">${wan(tChild)}</span>` : ""}
           ${tMort > 0 ? `<span class="k">剩下的房贷和负债</span><span class="v">${wan(tMort)}</span>` : ""}
           ${tSi > 0 ? `<span class="k">自己交的社保医保</span><span class="v">${wan(tSi)}</span>` : ""}
@@ -2553,7 +2570,7 @@ function renderResults() {
           <span class="k">直接加总</span><span class="v">${wan(direct)}</span>
           <span class="k total">实际需要（没花的钱还有收益）</span><span class="v total">${wan(a.need)}</span>
         </div>
-        <p class="muted" style="margin:8px 0 0">实际需要的钱，是保证停工后每个月存款都不低于 ${wan(p.floor)}的最少金额。${p.covered ? "领养老金以后按养老金够日常生活，不再算。" : ""}</p>
+        <p class="muted" style="margin:8px 0 0">实际需要的钱，是保证提前退休后每个月存款都不低于 ${wan(p.floor)}的最少金额。${p.covered ? "领养老金以后按养老金够日常生活，不再算。" : ""}</p>
       </div>
       <div class="card">
         <h3>这个计算没有考虑</h3>
@@ -2574,7 +2591,7 @@ function renderResults() {
       <summary>查看逐年明细</summary>
       <div class="card tbl">
         <table>
-          <thead><tr><th>你${sp ? "／伴侣" : ""}</th><th>起始月</th><th class="num">工资等</th><th class="num">养老金等</th><th class="num">生活费</th><th class="num">房贷负债</th><th class="num">孩子</th><th class="num">社保医保</th><th class="num">大额</th><th class="num">净额</th><th class="num">期初存款</th></tr></thead>
+          <thead><tr><th>你${sp ? "／伴侣" : ""}</th><th>起始月</th><th class="num">工资等</th><th class="num">养老金等</th><th class="num">日常开销</th><th class="num">房贷负债</th><th class="num">孩子</th><th class="num">社保医保</th><th class="num">大额</th><th class="num">净额</th><th class="num">期初存款</th></tr></thead>
           <tbody>${blocks
             .map((s) => {
               const rs = a.rows.slice(s, s + 12);
@@ -2586,22 +2603,22 @@ function renderResults() {
             .join("")}</tbody>
         </table>
       </div>
-      <p class="muted" style="margin-top:6px">每行是从“起始月”开始的 12 个月，单位万元，今天的购买力；蓝线那一行包含停工的月份。</p>
+      <p class="muted" style="margin-top:6px">每行是从“起始月”开始的 12 个月，单位万元，今天的购买力；蓝线那一行包含提前退休的月份。</p>
     </details>
   </section>
 
   <section class="muted" style="line-height:1.8">
-    计算方法：按月计算，所有金额按今天的购买力，投资收益为扣除通胀后的实际收益，按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；停工后收入 = 养老金 + 其他收入。
+    计算方法：按月计算，所有金额按今天的购买力，投资收益为扣除通胀后的实际收益，按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。
     法定退休时间按 2025 年起施行的渐进式延迟退休规定推算：男性原 60 岁，1965 年起出生的每 4 个月延迟 1 个月，最多到 63 岁；女性原 55 岁的，1970 年起出生的每 4 个月延迟 1 个月，最多到 58 岁；女性原 50 岁的，1975 年起出生的每 2 个月延迟 1 个月，最多到 55 岁。领养老金的最低缴费年限 2030 年起每年加半年，2039 年起为 20 年。
-    房贷和其他负债的月供固定，按通胀折算。失业的月份和停工后到领养老金之前，自己交医保。
+    房贷和其他负债的月供固定，按通胀折算。失业的月份和提前退休后到领养老金之前，自己交医保。
     养老金公式：基础养老金 =（计发基数 + 本人平均缴费水平）÷ 2 × 缴费年数 × 1%；个人账户养老金 = 账户累计 ÷ 计发月数（55 岁 170、58 岁 152、60 岁 139、63 岁 117 等，按国家计发月数表）。
-    “需要的存款”是保证停工后每个月存款都不低于备用金的最少金额：默认只算到两人都开始领养老金，之后按养老金够日常生活；也可以改成按实际养老金一直算到指定年龄。“每月最多能花”是让停工那个月存款刚好等于这个数的工作期间开销。这是规划测算，不是对收益的承诺。
+    “需要的存款”是保证提前退休后每个月存款都不低于备用金的最少金额：默认只算到两人都开始领养老金，之后按养老金够日常生活；也可以改成按实际养老金一直算到指定年龄。“每月最多能花”是让提前退休那个月存款刚好等于这个数的工作期间开销。这是规划测算，不是对收益的承诺。
   </section>`;
 
   last = { p, a, plan, minLine, jobAges, lossHalf, lossPerm };
   if (mbT && mbV) {
-    mbT.textContent = ok ? `${shortYM(stopIdx)} 可以停工` : `${shortYM(stopIdx)} 停工有缺口`;
-    mbV.textContent = ok ? `安全垫 ${wan(a.gap)}` : `差额 ${wan(-a.gap)}`;
+    mbT.textContent = ok ? `${shortYM(stopIdx)} 可以提前退休` : `${shortYM(stopIdx)} 退休还有缺口`;
+    mbV.textContent = ok ? `安全垫 ${wan(a.gap)}` : `缺口 ${wan(-a.gap)}`;
     mbV.style.color = ok ? "var(--success)" : "var(--danger)";
   }
   drawCharts();
@@ -2620,8 +2637,8 @@ function drawCharts() {
   lineChart(document.getElementById("chart-path"), {
     xs, series,
     titles: ks.map((t, i) => `你 ${xs[i]} 岁（${fmtYM(NOW + t)}）`),
-    ref: { value: a.need / 1e4, label: `停工时需要 ${wan(a.need)}` },
-    band: { from: xs[0] + p.T1 / 12, to: xs[xs.length - 1], label: "停工后" },
+    ref: { value: a.need / 1e4, label: `提前退休时需要 ${wan(a.need)}` },
+    band: { from: xs[0] + p.T1 / 12, to: xs[xs.length - 1], label: "提前退休后" },
     xStep: span > 40 ? 5 : span > 20 ? 2 : 1,
   });
   const jobBox = document.getElementById("chart-job");
@@ -2643,7 +2660,7 @@ function drawCharts() {
     cats,
     titles: starts.map((s, i) => `你 ${cats[i]} 岁（${shortYM(NOW + s)}–${shortYM(NOW + Math.min(s + 12, a.E) - 1)}）`),
     segs: [
-      { name: "生活费", color: css("--seg-living"), values: blk((r) => r.living) },
+      { name: "日常开销", color: css("--seg-living"), values: blk((r) => r.living) },
       { name: "孩子", color: css("--seg-child"), values: blk((r) => r.child) },
       { name: "房贷和负债", color: css("--seg-mort"), values: blk((r) => r.mort + r.debt) },
       { name: "社保医保", color: css("--seg-si"), values: blk((r) => r.med + r.si) },
