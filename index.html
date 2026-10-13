@@ -499,8 +499,8 @@
     justify-content: space-between;
     gap: 18px;
   }
-  .plan-panel.ok { background: var(--brand-light); color: #064e3b; }
-  .plan-panel.fail { background: var(--rose-light); color: #881337; }
+  .plan-panel.ok { background: linear-gradient(135deg, #ecfdf5 0%, rgba(240, 253, 250, 0.7) 100%); --plan-label: rgba(6, 78, 59, 0.7); --plan-line: rgba(167, 243, 208, 0.8); --plan-title: #022c22; }
+  .plan-panel.fail { background: linear-gradient(135deg, #fff1f2 0%, rgba(255, 251, 235, 0.6) 100%); --plan-label: rgba(136, 19, 55, 0.7); --plan-line: rgba(254, 205, 211, 0.8); --plan-title: #4c0519; }
   .plan-head {
     display: flex;
     align-items: center;
@@ -518,36 +518,48 @@
     margin: 8px 0 0;
     font-size: 17px;
     font-weight: 900;
-    color: var(--text);
+    color: var(--plan-title);
   }
-  .plan-gap {
-    font-size: 34px;
-    font-weight: 950;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-  }
-  .plan-panel.ok .plan-gap { color: var(--brand); }
-  .plan-panel.fail .plan-gap { color: var(--rose); }
+  /* 主数字：退休时需要准备的存款 */
+  .plan-need-label { margin: 20px 0 0; font-size: 13px; font-weight: 700; color: var(--plan-label); }
+  .plan-need-val { margin: 2px 0 0; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+  .plan-panel.ok .plan-need-val { color: #047857; }
+  .plan-panel.fail .plan-need-val { color: #e11d48; }
+  .plan-need-val b { font-size: 56px; font-weight: 950; letter-spacing: -0.03em; line-height: 1; }
+  .plan-need-val span { font-size: 20px; font-weight: 900; opacity: 0.8; }
 
-  .plan-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+  /* 次要数字：届时拥有、每月最多花（细线分隔，不套卡片） */
+  .plan-stats {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--plan-line);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .plan-row-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.8);
-    padding: 10px 14px;
-    border-radius: 16px;
-    font-size: 12px;
-  }
-  .plan-row-label { color: var(--text-3); font-weight: 600; }
-  .plan-row-val { font-weight: 900; color: var(--text); font-variant-numeric: tabular-nums; }
-  .plan-row-val.danger { color: var(--rose); }
+  .plan-stat { min-width: 0; }
+  .plan-stat + .plan-stat { padding-left: 16px; border-left: 1px solid var(--plan-line); }
+  .plan-stat-label { margin: 0; font-size: 12px; font-weight: 700; color: var(--plan-label); }
+  .plan-stat-val { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; font-variant-numeric: tabular-nums; }
+  .plan-stat-val b { font-size: 28px; font-weight: 950; letter-spacing: -0.02em; line-height: 1.1; }
+  .plan-stat-val b.text { font-size: 15px; }
+  .plan-stat-val span { font-size: 12px; font-weight: 800; opacity: 0.75; }
+  .plan-panel.ok .plan-stat-val.have { color: #0f766e; }
+  .plan-panel.fail .plan-stat-val.have { color: #9f1239; }
+  .plan-stat-val.ceil { color: #b45309; }
+  .plan-panel .plan-stat-val.danger { color: #e11d48; }
+
+  /* 差额与达成进度 */
+  .plan-progress-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .plan-progress-gap { font-weight: 900; }
+  .plan-panel.ok .plan-progress-gap { color: var(--brand); }
+  .plan-panel.fail .plan-progress-gap { color: var(--rose); }
+  .plan-progress-pct { font-weight: 700; color: var(--plan-label); font-variant-numeric: tabular-nums; }
+  .plan-progress-bar { height: 10px; border-radius: 999px; overflow: hidden; }
+  .plan-panel.ok .plan-progress-bar { background: #d1fae5; }
+  .plan-panel.fail .plan-progress-bar { background: #ffe4e6; }
+  .plan-progress-bar i { display: block; height: 100%; border-radius: 999px; }
+  .plan-panel.ok .plan-progress-bar i { background: linear-gradient(90deg, #10b981, #2dd4bf); }
+  .plan-panel.fail .plan-progress-bar i { background: linear-gradient(90deg, #f43f5e, #fb923c); }
 
   .safety-tip {
     margin-top: 20px;
@@ -555,9 +567,6 @@
     padding: 14px 18px;
     font-size: 13.5px;
     line-height: 1.6;
-    display: flex;
-    align-items: center;
-    gap: 12px;
   }
   .safety-tip.strong { background: var(--brand-light); color: #064e3b; }
   .safety-tip.warn { background: var(--amber-light); color: #78350f; }
@@ -618,30 +627,6 @@
   .fact-num { font-size: 30px; font-weight: 950; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: #0f172a; margin: 4px 0 0; }
   .fact-num span { font-size: 13px; font-weight: 700; color: var(--text-4); margin-left: 2px; }
   .fact-sub { font-size: 11.5px; font-weight: 600; color: var(--text-4); margin: 4px 0 0; }
-
-  /* 怎么能更早退休 (Levers) */
-  .levers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-  }
-  .lever-btn {
-    border-radius: 20px;
-    padding: 18px;
-    border: none;
-    text-align: left;
-    background: rgba(255, 255, 255, 0.9);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .lever-btn:hover { background: #ffffff; transform: translateY(-2px); }
-  .lever-btn.active {
-    background: #d1fae5;
-  }
-  .lever-name { font-size: 13.5px; font-weight: 900; color: #0f172a; margin: 0; }
-  .lever-gain { font-size: 22px; font-weight: 950; color: var(--brand); margin: 8px 0 0; }
-  .lever-gain.gray { color: var(--text-4); }
-  .lever-sub { font-size: 11.5px; font-weight: 600; color: var(--text-4); margin: 4px 0 0; }
 
   /* 图表卡片 */
   .chart-box {
@@ -1010,9 +995,14 @@
       border-radius: 22px;
       padding: 16px 14px;
     }
-    .plan-gap {
-      font-size: 26px;
-    }
+    .plan-need-label { margin-top: 16px; }
+    .plan-need-val b { font-size: 44px; }
+    .plan-need-val span { font-size: 17px; }
+    .plan-stats { margin-top: 16px; padding-top: 14px; }
+    .plan-stat + .plan-stat { padding-left: 12px; }
+    .plan-stat-label { font-size: 11.5px; }
+    .plan-stat-val b { font-size: 22px; }
+    .plan-stat-val b.text { font-size: 14px; }
 
     /* 4 个关键事实移动端：优雅 2 列 Bento 磁贴 */
     .facts-grid {
@@ -1218,7 +1208,7 @@
   <!-- 1. 快速微调条 (PC端展示，移动端隐藏) -->
   <div class="dials-grid" id="compact-dials"></div>
 
-  <!-- 2. 测算结果容器 (AnswerCard, KeyFacts, Levers, Charts, etc.) -->
+  <!-- 2. 测算结果容器 (AnswerCard, KeyFacts, Charts, etc.) -->
   <div id="results" style="display:flex; flex-direction:column; gap:24px;"></div>
 </div>
 
@@ -1305,6 +1295,11 @@ const wan = (v) => {
   const x = Math.abs(v / 1e4);
   const n = x < 10 ? Math.round(x * 10) / 10 : Math.round(x);
   return (v < 0 && n > 0 ? "−" : "") + n + " 万";
+};
+// "210 万" → <b>210</b><span>万</span>；没有单位的文案整体加粗
+const moneyHtml = (v) => {
+  const m = /^(.+?)\s(\S+)$/.exec(v);
+  return m ? `<b>${m[1]}</b><span>${m[2]}</span>` : `<b class="text">${v}</b>`;
 };
 const signedWan = (v) => (!isFinite(v) ? "—" : (v >= 0 ? "+" : "−") + wan(Math.abs(v)));
 const w1 = (v) => (isFinite(v) ? (Math.round(v / 1000) / 10).toFixed(1) : "—");
@@ -1618,24 +1613,6 @@ function scenarioList(p) {
     list.push({ id: "earlier1", name: `早 1 年退休（${fmtYM(p.now + p.T1 - 12)}）`, job: false, p: withStop(p, p.T1 - 12) });
   }
   return list;
-}
-
-function buildLevers(s) {
-  const list = [
-    { id: "work-500", name: "工作期间每月少花 500 元", patch: { livingWork: s.livingWork - 500 }, when: s.livingWork >= 1500 },
-    { id: "work-1000", name: "工作期间每月少花 1,000 元", patch: { livingWork: s.livingWork - 1000 }, when: s.livingWork >= 2000 },
-    {
-      id: "bridge-500",
-      name: "退休后每月少花 500 元",
-      patch: { livingBridge: s.livingBridge - 500, livingPension: Math.max(0, s.livingPension - 500) },
-      when: s.livingBridge >= 1500,
-    },
-    { id: "inc+1000", name: "每月多赚 1,000 元", patch: { inc1: s.inc1 + 1000 }, when: true },
-    { id: "ret+1", name: "投资收益每年多 1 个百分点", patch: { ret: s.ret + 1 }, when: true },
-  ];
-  return list
-    .filter((x) => x.when)
-    .map((x) => ({ id: x.id, name: x.name, earliest: earliest(toParams({ ...s, ...x.patch }, NOW)) }));
 }
 
 const birthOf = (s, key) => ym(s[key].birth);
@@ -2059,12 +2036,6 @@ window.updateDial = function(key, val) {
   renderResults();
 };
 
-let activeLeverId = null;
-window.toggleLever = function(id) {
-  activeLeverId = activeLeverId === id ? null : id;
-  renderResults();
-};
-
 let countdownTimer = null;
 
 function renderResults() {
@@ -2162,8 +2133,6 @@ function renderResults() {
   for (let t = p.T1; t <= Math.min(a.E, plan.length - 1); t++) if (plan[t] < plan[low]) low = t;
 
   // 怎么能更早退休建议
-  const levers = buildLevers(S);
-  const activeLever = levers.find((l) => l.id === activeLeverId);
 
   // 提前退休后收支 Kv
   const post = a.rows.slice(a.T);
@@ -2262,27 +2231,30 @@ function renderResults() {
         <div class="plan-panel ${ok ? "ok" : "fail"}">
           <div>
             <div class="plan-head">
-              <span style="font-size:11px; font-weight:900; letter-spacing:0.02em; color:var(--text-4);">你的计划目标</span>
+              <span style="font-size:11px; font-weight:900; letter-spacing:0.02em; color:var(--plan-label);">你的计划目标</span>
               <span class="plan-tag">${ok ? "完全可行" : "仍有差额"}</span>
             </div>
-            <h3 class="plan-title">如果 ${stopAge}退休 <span style="font-size:12px; font-weight:600; color:var(--text-4);">${shortYM(stopIdx)}</span></h3>
-            <div class="plan-gap">${ok ? `多出 ${wan(a.gap)}` : `还差 ${wan(-a.gap)}`}</div>
-
-            <div style="margin-top:14px;">
-              <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--text-3); margin-bottom:6px;">
-                <span>储备金达成进度</span>
-                <span>${planPct.toFixed(1)}%</span>
+            <h3 class="plan-title">如果 ${stopAge}退休 <span style="font-size:12px; font-weight:700; color:var(--plan-label);">${shortYM(stopIdx)}</span></h3>
+            <p class="plan-need-label">退休时需要准备的存款</p>
+            <p class="plan-need-val">${moneyHtml(wan(a.need))}</p>
+            <div class="plan-stats">
+              <div class="plan-stat">
+                <p class="plan-stat-label">届时预计拥有</p>
+                <p class="plan-stat-val have ${a.have < 0 ? "danger" : ""}">${moneyHtml(a.have >= 0 ? wan(a.have) : "撑不到那时")}</p>
               </div>
-              <div style="height:10px; border-radius:999px; background:rgba(255,255,255,0.85); overflow:hidden;">
-                <div style="height:100%; border-radius:999px; background:${ok ? "var(--brand)" : "var(--rose)"}; width:${Math.min(100, planPct)}%;"></div>
+              <div class="plan-stat">
+                <p class="plan-stat-label">${ok ? "工作期间每月最多花" : "每月需降到"}</p>
+                <p class="plan-stat-val ceil ${planCeil ? "" : "danger"}">${moneyHtml(planCeil || "光省钱不够")}</p>
               </div>
             </div>
           </div>
 
-          <div class="plan-rows">
-            <div class="plan-row-item"><span class="plan-row-label">退休时需要储备</span><span class="plan-row-val">${wan(a.need)}</span></div>
-            <div class="plan-row-item"><span class="plan-row-label">届时预计拥有</span><span class="plan-row-val ${a.have < 0 ? "danger" : ""}">${a.have >= 0 ? wan(a.have) : "撑不到那时"}</span></div>
-            <div class="plan-row-item"><span class="plan-row-label">${ok ? "在职月日常消费上限" : "若按计划退休，月消费需降至"}</span><span class="plan-row-val ${planCeil ? "" : "danger"}">${planCeil || "光省钱不够"}</span></div>
+          <div>
+            <div class="plan-progress-head">
+              <span class="plan-progress-gap">${ok ? `比需要的多出 ${wan(a.gap)}` : `比需要的还差 ${wan(-a.gap)}`}</span>
+              <span class="plan-progress-pct">已准备 ${planPct.toFixed(1)}%</span>
+            </div>
+            <div class="plan-progress-bar"><i style="width:${Math.min(100, planPct)}%;"></i></div>
           </div>
         </div>
       </div>
@@ -2358,53 +2330,7 @@ function renderResults() {
       } “每月开销”指工作期间日常开支，不含房租、房贷、负债和孩子；存款数字已全额扣除这些支出。
     </div>
 
-    <!-- 4. 怎么能更早退休 (Levers) -->
-    <div class="bento-card bento-section">
-      <div class="bento-header">
-        <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg></div>
-        <div>
-          <h2 class="bento-title">怎么能更早退休（行动杠杆沙盘）</h2>
-          <p class="bento-desc">在现在的设定上只改一项，看最早退休时间能提前多少。点击卡片可进行对比。</p>
-        </div>
-      </div>
-
-      <div class="levers-grid">
-        ${levers.map((l) => {
-          const cur = base.earliest;
-          const e = l.earliest;
-          const gain = e != null && cur != null ? cur - e : 0;
-          let val = "变化不到 1 个月";
-          let sub = "对最早退休时间影响不大";
-          let good = false;
-          if (e == null) { val = "75 岁前还是不行"; sub = "需要再配合其他调整"; }
-          else if (cur == null) { val = "75 岁前能退休了"; sub = `最早 ${ageTxt(NOW + e - p.b1)} · ${shortYM(NOW + e)}`; good = true; }
-          else if (gain > 0) { val = `提前 ${durTxt(gain)}`; sub = `最早 ${ageTxt(NOW + e - p.b1)} · ${shortYM(NOW + e)}`; good = true; }
-          const isAct = activeLeverId === l.id;
-          return `
-            <button type="button" class="lever-btn ${isAct ? "active" : ""}" onclick="toggleLever('${l.id}')">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <p class="lever-name">${l.name}</p>
-                ${isAct ? '<span class="pill-badge emerald">已选对比</span>' : ""}
-              </div>
-              <p class="lever-gain ${good ? "" : "gray"}">${val}</p>
-              <p class="lever-sub">${sub}</p>
-            </button>
-          `;
-        }).join("")}
-      </div>
-
-      ${activeLever ? `
-        <div style="background:#d1fae5; border-radius:20px; padding:16px 20px; font-size:12.5px; font-weight:800; color:#064e3b; display:flex; justify-content:space-between; align-items:center;">
-          <span>
-            已激活 <b>${activeLever.name}</b> 模拟对比：
-            ${activeLever.earliest != null && base.earliest != null ? `最早退休年龄从 <b>${ageTxt(NOW + base.earliest - p.b1)}</b> 提前至 <b>${ageTxt(NOW + activeLever.earliest - p.b1)}</b>（提前 ${durTxt(base.earliest - activeLever.earliest)}）。` : "最早退休时间迎来显著改善。"}
-          </span>
-          <button type="button" class="btn-pill secondary" onclick="toggleLever('${activeLever.id}')" style="padding:4px 12px; font-size:11px;">取消对比</button>
-        </div>
-      ` : ""}
-    </div>
-
-    <!-- 5. 现在每月的钱与养老金 -->
+    <!-- 4. 现在每月的钱与养老金 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="m7 6 10 10"/></svg></div>
@@ -2484,7 +2410,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 6. 退休前每年的收支堆叠图 -->
+    <!-- 5. 退休前每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"/><path d="M16 10h.01"/><path d="M2 8v1a2 2 0 0 0 2 2h1"/></svg></div>
@@ -2541,7 +2467,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 7. 提前退休后每年的收支堆叠图 -->
+    <!-- 6. 提前退休后每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
@@ -2598,7 +2524,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 8. 工作风险分析 -->
+    <!-- 7. 工作风险分析 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
@@ -2615,7 +2541,7 @@ function renderResults() {
       <div class="chart-box" id="chart-job"></div>
     </div>
 
-    <!-- 9. 压力测试表 -->
+    <!-- 8. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
       <div style="padding:24px 28px 16px;">
         <h2 class="bento-title">压力测试</h2>
@@ -2655,7 +2581,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 10. 逐年明细折叠大表 -->
+    <!-- 9. 逐年明细折叠大表 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">查看逐年详细现金流明细</summary>
       <div style="margin-top:16px; overflow-x:auto;">
@@ -2702,7 +2628,7 @@ function renderResults() {
       </div>
     </details>
 
-    <!-- 11. 政策与算法说明折叠 -->
+    <!-- 10. 政策与算法说明折叠 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">计算方法与政策公式说明</summary>
       <div style="margin-top:16px; font-size:12.5px; color:var(--text-3); font-weight:600; line-height:1.9;">
