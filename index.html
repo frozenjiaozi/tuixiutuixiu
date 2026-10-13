@@ -2644,15 +2644,81 @@ window.switchModalCat = function(id) {
   renderModalContent();
 };
 
+
+// ==================== 完整财务参数表单渲染与联动 ====================
+
+const PRESETS = [
+  ["car", "换车"],
+  ["house", "换房 / 改善住房"],
+  ["reno", "装修"],
+  ["edu", "孩子教育金"],
+  ["wed", "孩子婚嫁"],
+  ["parents", "父母养老医疗"],
+  ["custom", "自定义"],
+];
+
+function presetItem(s, k) {
+  const kid = s.hasKids && s.children && s.children.length ? ym(s.children[0].date) : NaN;
+  const at = (i) => ymStr(Math.max(NOW + 1, i));
+  switch (k) {
+    case "car":
+      return { name: "换车", date: at(NOW + 60), amount: 15, every: 10 };
+    case "house":
+      return { name: "换房（首付差额）", date: at(NOW + 96), amount: 50, every: 0 };
+    case "reno":
+      return { name: "装修", date: at(NOW + 36), amount: 15, every: 0 };
+    case "edu":
+      return { name: "孩子教育金", date: at(isFinite(kid) ? kid + 216 : NOW + 180), amount: 20, every: 0 };
+    case "wed":
+      return { name: "孩子婚嫁", date: at(isFinite(kid) ? kid + 312 : NOW + 300), amount: 20, every: 0 };
+    case "parents":
+      return { name: "父母养老医疗", date: at(NOW + 120), amount: 10, every: 0 };
+    default:
+      return { name: "大额支出", date: at(NOW + 60), amount: 10, every: 0 };
+  }
+}
+
+const horizonEnd = (s) => {
+  if (s.afterPension === "covered") return lastPensionDate(s);
+  const b = ym(s.me.birth);
+  return isFinite(b) ? b + s.endAge * 12 : NaN;
+};
+
+const stopAgeYears = (s) => {
+  const x = Math.floor((ym(s.stopMe) - ym(s.me.birth)) / 12);
+  return isFinite(x) ? x : 45;
+};
+
 function renderModalContent() {
   const box = document.getElementById("modal-form-content");
+  const b1 = ym(S.me.birth);
+  const b2 = S.hasSpouse ? ym(S.spouse.birth) : NaN;
+  const st1 = statutory(b1, S.me.gender);
+  const st2 = S.hasSpouse ? statutory(b2, S.spouse.gender) : null;
+  const s1 = ym(S.stopMe);
+  const s2 = S.hasSpouse ? ym(S.stopSpouse) : NaN;
+
   if (activeModalCat === "basic") {
+    let stopTip1 = "";
+    if (isFinite(s1) && st1) {
+      if (s1 <= NOW) stopTip1 = "提前退休的时间要晚于这个月";
+      else if (s1 > st1.date) stopTip1 = `已经晚于法定退休时间（${fmtYM(st1.date)}），请往前选`;
+      else if (s1 === st1.date) stopTip1 = "这就是法定退休时间，不算提前退休";
+      else stopTip1 = `比法定退休早 ${durTxt(st1.date - s1)}，这段时间要靠存款过`;
+    }
+
+    let stopTip2 = "";
+    if (S.hasSpouse && !S.together && isFinite(s2) && st2) {
+      if (s2 > st2.date) stopTip2 = `已经晚于伴侣法定退休时间（${fmtYM(st2.date)}）`;
+      else stopTip2 = `比法定退休早 ${durTxt(st2.date - s2)}`;
+    }
+
     box.innerHTML = `
       <div class="f-group">
         <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">婚姻状况</h4>
         <div style="display:flex; gap:12px;">
-          <label style="display:flex; align-items:center; gap:6px; font-weight:700;"><input type="radio" name="marital" ${S.hasSpouse ? "checked" : ""} onchange="updateSpouse(true)"> 已婚/伴侣</label>
-          <label style="display:flex; align-items:center; gap:6px; font-weight:700;"><input type="radio" name="marital" ${!S.hasSpouse ? "checked" : ""} onchange="updateSpouse(false)"> 单身</label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;"><input type="radio" name="marital" ${S.hasSpouse ? "checked" : ""} onchange="updateSpouse(true)"> 已婚 / 伴侣</label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;"><input type="radio" name="marital" ${!S.hasSpouse ? "checked" : ""} onchange="updateSpouse(false)"> 单身</label>
         </div>
       </div>
 
@@ -2663,14 +2729,15 @@ function renderModalContent() {
           <div class="f-inp-wrap"><input type="date" value="${S.me.birth}" onchange="updateInput('me.birth', this.value)"></div>
         </div>
         <div class="f-row">
-          <span class="f-label">性别 (影响法定退休时间推算)</span>
+          <span class="f-label">性别 (推算渐进式法定延迟退休)</span>
           <div class="f-inp-wrap">
             <select onchange="updateInput('me.gender', this.value)">
-              <option value="male" ${S.me.gender === "male" ? "selected" : ""}>男</option>
-              <option value="female55" ${S.me.gender === "female55" ? "selected" : ""}>女</option>
+              <option value="male" ${S.me.gender === "male" ? "selected" : ""}>男 (基准 60 岁)</option>
+              <option value="female55" ${S.me.gender === "female55" ? "selected" : ""}>女 (基准 55 岁)</option>
             </select>
           </div>
         </div>
+        ${st1 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">法定退休：${fmtYM(st1.date)}（${ageTxt(st1.ageM)}${st1.delay ? `，比原基准延后 ${durTxt(st1.delay)}` : ""}），从该月起领养老金</span>` : ""}
       </div>
 
       ${S.hasSpouse ? `
@@ -2689,38 +2756,82 @@ function renderModalContent() {
               </select>
             </div>
           </div>
+          ${st2 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">伴侣法定退休：${fmtYM(st2.date)}（${ageTxt(st2.ageM)}${st2.delay ? `，延后 ${durTxt(st2.delay)}` : ""}）</span>` : ""}
         </div>
       ` : ""}
 
       <div class="f-group">
-        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">现有资产储备</h4>
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">计划什么时候提前退休</h4>
         <div class="f-row">
-          <span class="f-label">现在全部可动用存款与投资 (总资产)</span>
-          <div class="f-inp-wrap"><input type="number" step="1" value="${S.assets}" onchange="updateInput('assets', +this.value)"><span class="f-unit">万元</span></div>
-          <span class="f-hint">活期、理财、基金、股票等直接能花的钱。</span>
+          <span class="f-label">你计划多少岁提前退休</span>
+          <div class="f-inp-wrap">
+            <input type="number" step="1" value="${S.stopAgeMe}" onchange="updateStopAge('me', +this.value)">
+            <span class="f-unit">岁</span>
+          </div>
+          ${stopTip1 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">${stopTip1}</span>` : ""}
         </div>
+
+        ${S.hasSpouse ? `
+          <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;">
+              <input type="checkbox" ${S.together ? "checked" : ""} onchange="updateInput('together', this.checked)">
+              伴侣和你同一个月提前退休
+            </label>
+          </div>
+
+          ${!S.together ? `
+            <div class="f-row" style="margin-top:8px;">
+              <span class="f-label">伴侣计划多少岁提前退休</span>
+              <div class="f-inp-wrap">
+                <input type="number" step="1" value="${S.stopAgeSpouse}" onchange="updateStopAge('spouse', +this.value)">
+                <span class="f-unit">岁</span>
+              </div>
+              ${stopTip2 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">${stopTip2}</span>` : ""}
+            </div>
+          ` : ""}
+        ` : ""}
+      </div>
+
+      <div class="f-group">
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">现有资产与收益率</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="f-row">
+            <span class="f-label">当前总资产储备</span>
+            <div class="f-inp-wrap"><input type="number" step="1" value="${S.assets}" onchange="updateInput('assets', +this.value)"><span class="f-unit">万元</span></div>
+          </div>
+          <div class="f-row">
+            <span class="f-label">投资年化收益率</span>
+            <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.ret}" onchange="updateInput('ret', +this.value)"><span class="f-unit">%</span></div>
+          </div>
+        </div>
+        <span class="f-hint">资产填随时可动用的钱：活期、理财、基金等，不含自住房房产估值。</span>
       </div>
     `;
   } else if (activeModalCat === "income") {
     box.innerHTML = `
       <div class="f-group">
-        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">工作期收入</h4>
-        <div class="f-row">
-          <span class="f-label">你每月税后到手工资</span>
-          <div class="f-inp-wrap"><input type="number" step="500" value="${S.inc1}" onchange="updateInput('inc1', +this.value)"><span class="f-unit">元/月</span></div>
-        </div>
-        <div class="f-row">
-          <span class="f-label">你每年年终奖 (税后)</span>
-          <div class="f-inp-wrap"><input type="number" step="1" value="${S.bonus1}" onchange="updateInput('bonus1', +this.value)"><span class="f-unit">万元/年</span></div>
-        </div>
-        ${S.hasSpouse ? `
-          <div class="f-row" style="margin-top:12px;">
-            <span class="f-label">伴侣每月税后到手工资</span>
-            <div class="f-inp-wrap"><input type="number" step="500" value="${S.inc2}" onchange="updateInput('inc2', +this.value)"><span class="f-unit">元/月</span></div>
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">工作期收入（税后到手）</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="f-row">
+            <span class="f-label">你每月到手工资</span>
+            <div class="f-inp-wrap"><input type="number" step="500" value="${S.inc1}" onchange="updateInput('inc1', +this.value)"><span class="f-unit">元/月</span></div>
           </div>
           <div class="f-row">
-            <span class="f-label">伴侣每年年终奖</span>
-            <div class="f-inp-wrap"><input type="number" step="1" value="${S.bonus2}" onchange="updateInput('bonus2', +this.value)"><span class="f-unit">万元/年</span></div>
+            <span class="f-label">你每年年终奖 (税后)</span>
+            <div class="f-inp-wrap"><input type="number" step="1" value="${S.bonus1}" onchange="updateInput('bonus1', +this.value)"><span class="f-unit">万元/年</span></div>
+          </div>
+        </div>
+
+        ${S.hasSpouse ? `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
+            <div class="f-row">
+              <span class="f-label">伴侣每月到手工资</span>
+              <div class="f-inp-wrap"><input type="number" step="500" value="${S.inc2}" onchange="updateInput('inc2', +this.value)"><span class="f-unit">元/月</span></div>
+            </div>
+            <div class="f-row">
+              <span class="f-label">伴侣每年年终奖</span>
+              <div class="f-inp-wrap"><input type="number" step="1" value="${S.bonus2}" onchange="updateInput('bonus2', +this.value)"><span class="f-unit">万元/年</span></div>
+            </div>
           </div>
         ` : ""}
       </div>
@@ -2730,21 +2841,54 @@ function renderModalContent() {
         <div class="f-row">
           <div class="f-inp-wrap">
             <select onchange="updateInput('outlook', this.value)">
-              <option value="stable" ${S.outlook === "stable" ? "selected" : ""}>基本稳定（考虑物价上涨后持平）</option>
-              <option value="up" ${S.outlook === "up" ? "selected" : ""}>持续上升（扣除物价后仍上涨）</option>
-              <option value="down" ${S.outlook === "down" ? "selected" : ""}>逐年下滑</option>
-              <option value="unstable" ${S.outlook === "unstable" ? "selected" : ""}>中年可能遭遇降薪/失业</option>
+              <option value="stable" ${S.outlook === "stable" ? "selected" : ""}>稳定：收入基本持平不变</option>
+              <option value="up" ${S.outlook === "up" ? "selected" : ""}>上升：收入每年持续上涨</option>
+              <option value="down" ${S.outlook === "down" ? "selected" : ""}>下降：收入每年小幅下滑</option>
+              <option value="unstable" ${S.outlook === "unstable" ? "selected" : ""}>不稳定：过了某个年龄遭遇降薪/失业</option>
             </select>
           </div>
         </div>
+
+        ${S.outlook === "up" ? `
+          <div class="f-row" style="margin-top:8px;">
+            <span class="f-label">每年大概上涨幅度</span>
+            <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.upRate}" onchange="updateInput('upRate', +this.value)"><span class="f-unit">% / 年</span></div>
+            <span class="f-hint">参考：近年来城镇平均工资年涨幅约为 2%~4%。</span>
+          </div>
+        ` : ""}
+
+        ${S.outlook === "down" ? `
+          <div class="f-row" style="margin-top:8px;">
+            <span class="f-label">每年大概下滑幅度</span>
+            <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.downRate}" onchange="updateInput('downRate', +this.value)"><span class="f-unit">% / 年</span></div>
+            <span class="f-hint">比如行业周期收缩、降薪。按每年降 3% 算，10 年后收入约为现在的 74%。</span>
+          </div>
+        ` : ""}
+
+        ${S.outlook === "unstable" ? `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
+            <div class="f-row">
+              <span class="f-label">从多少岁开始降薪</span>
+              <div class="f-inp-wrap"><input type="number" step="1" value="${S.cutAge}" onchange="updateInput('cutAge', +this.value)"><span class="f-unit">岁</span></div>
+            </div>
+            <div class="f-row">
+              <span class="f-label">收入变成原来的</span>
+              <div class="f-inp-wrap"><input type="number" step="5" value="${S.cutPct}" onchange="updateInput('cutPct', +this.value)"><span class="f-unit">%</span></div>
+            </div>
+          </div>
+          <span class="f-hint">满该年龄后，工资、年终奖和公积金按此比例核算。</span>
+        ` : ""}
       </div>
     `;
   } else if (activeModalCat === "debt") {
+    const mortEndIdx = ym(S.mortEnd);
+    const mortLeft = isFinite(mortEndIdx) ? mortEndIdx - NOW + 1 : 0;
+
     box.innerHTML = `
       <div class="f-group">
         <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">房贷</h4>
         <div style="display:flex; gap:12px; margin-bottom:10px;">
-          <label style="display:flex; align-items:center; gap:6px; font-weight:700;"><input type="checkbox" ${S.hasMortgage ? "checked" : ""} onchange="updateInput('hasMortgage', this.checked)"> 有房贷</label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;"><input type="checkbox" ${S.hasMortgage ? "checked" : ""} onchange="updateInput('hasMortgage', this.checked)"> 有房贷</label>
         </div>
         ${S.hasMortgage ? `
           <div class="f-row">
@@ -2754,31 +2898,85 @@ function renderModalContent() {
           <div class="f-row">
             <span class="f-label">最后一期房贷时间</span>
             <div class="f-inp-wrap"><input type="month" value="${S.mortEnd}" onchange="updateInput('mortEnd', this.value)"></div>
+            ${mortLeft > 0 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">还剩 ${mortLeft} 期，约 ${durTxt(mortLeft)}</span>` : "<span class='f-hint'>已还完</span>"}
           </div>
           <div class="f-row">
-            <span class="f-label">公积金冲抵金额</span>
+            <span class="f-label">公积金每月冲抵金额</span>
             <div class="f-inp-wrap"><input type="number" step="100" value="${S.hfOffset}" onchange="updateInput('hfOffset', +this.value)"><span class="f-unit">元/月</span></div>
-            <span class="f-hint">每月从公积金账户直接冲还贷的金额。</span>
+            <span class="f-hint">每月从公积金账户直接冲还贷的金额（上班期间扣除）。</span>
           </div>
         ` : ""}
       </div>
+
+      <div class="f-group">
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">其他负债（车贷、消费贷等）</h4>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${(S.debts || []).map((debt, i) => {
+            const dEnd = ym(debt.end);
+            const dLeft = isFinite(dEnd) ? dEnd - NOW + 1 : 0;
+            return `
+              <div style="background:#ffffff; border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <input type="text" value="${debt.name}" style="font-weight:900; font-size:13.5px; border:none; outline:none;" onchange="updateDebtItem(${i}, 'name', this.value)">
+                  <button type="button" class="dial-btn" onclick="removeDebt(${i})">✕</button>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <div class="f-row">
+                    <span class="f-label" style="font-size:11px;">每月还款</span>
+                    <div class="f-inp-wrap"><input type="number" step="100" value="${debt.monthly}" onchange="updateDebtItem(${i}, 'monthly', +this.value)"><span class="f-unit">元</span></div>
+                  </div>
+                  <div class="f-row">
+                    <span class="f-label" style="font-size:11px;">最后一期</span>
+                    <div class="f-inp-wrap"><input type="month" value="${debt.end}" onchange="updateDebtItem(${i}, 'end', this.value)"></div>
+                  </div>
+                </div>
+                ${dLeft > 0 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">还剩 ${dLeft} 期，约 ${durTxt(dLeft)}</span>` : ""}
+              </div>
+            `;
+          }).join("")}
+
+          <button type="button" class="btn-pill secondary" onclick="addNewDebt()" style="justify-content:center;">+ 添加一笔负债</button>
+        </div>
+      </div>
     `;
   } else if (activeModalCat === "spend") {
+    const lp = lastPensionDate(S);
+    const bridgeDur = isFinite(s1) && isFinite(lp) && lp > s1 ? lp - s1 : 0;
+
     box.innerHTML = `
       <div class="f-group">
         <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">日常开销</h4>
         <div class="f-row">
           <span class="f-label">现在（上班期间）全家每月日常开销</span>
           <div class="f-inp-wrap"><input type="number" step="500" value="${S.livingWork}" onchange="updateInput('livingWork', +this.value)"><span class="f-unit">元/月</span></div>
-          <span class="f-hint">吃饭、日用、物业水电等。房租、房贷、孩子另外算。</span>
+          <span class="f-hint">吃穿用、交通、水电等日常开支，不含房租、房贷、负债和孩子。</span>
         </div>
-        <div class="f-row" style="margin-top:10px;">
+
+        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+          <label style="display:flex; align-items:center; gap:6px; font-weight:700; cursor:pointer;">
+            <input type="checkbox" ${S.hasRent ? "checked" : ""} onchange="updateInput('hasRent', this.checked)">
+            现在租房住
+          </label>
+        </div>
+
+        ${S.hasRent ? `
+          <div class="f-row" style="margin-top:8px;">
+            <span class="f-label">每月房租</span>
+            <div class="f-inp-wrap"><input type="number" step="200" value="${S.rent}" onchange="updateInput('rent', +this.value)"><span class="f-unit">元/月</span></div>
+            <span class="f-hint">只在上班期间算，交到你提前退休那个月为止。</span>
+          </div>
+        ` : ""}
+
+        <div class="f-row" style="margin-top:12px;">
           <span class="f-label">提前退休后到领养老金前，每月日常开支</span>
           <div class="f-inp-wrap"><input type="number" step="500" value="${S.livingBridge}" onchange="updateInput('livingBridge', +this.value)"><span class="f-unit">元/月</span></div>
+          ${bridgeDur > 0 ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">从提前退休到两人领养老金，约 ${durTxt(bridgeDur)}（${shortYM(s1)} 到 ${shortYM(lp)}）靠自备资产过渡</span>` : ""}
         </div>
-        <div class="f-row" style="margin-top:10px;">
+
+        <div class="f-row" style="margin-top:12px;">
           <span class="f-label">领养老金以后的每月日常开支</span>
           <div class="f-inp-wrap"><input type="number" step="500" value="${S.livingPension}" onchange="updateInput('livingPension', +this.value)"><span class="f-unit">元/月</span></div>
+          <span class="f-hint">进入老年后的日常消费水平。</span>
         </div>
       </div>
     `;
@@ -2797,7 +2995,6 @@ function renderModalContent() {
           <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
             ${(S.children || []).map((c, i) => {
               const b = ym(c.date);
-              const b1 = ym(S.me.birth);
               let infoTxt = "";
               if (isFinite(b)) {
                 if (c.born) {
@@ -2876,124 +3073,309 @@ function renderModalContent() {
       </div>
     `;
   } else if (activeModalCat === "big") {
+    const E = horizonEnd(S);
     box.innerHTML = `
       <div class="f-group">
-        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">大额一次性或周期支出</h4>
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          ${S.oneOffs.map((o, idx) => `
-            <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; padding:10px 14px; border-radius:14px;">
-              <div><b>${o.name}</b> <span style="font-size:12px; color:var(--text-4);">${o.date}</span></div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <b style="color:var(--rose);">${o.amount} 万元</b>
-                <button type="button" class="dial-btn" onclick="removeOneOff(${idx})">✕</button>
-              </div>
-            </div>
+        <h4 style="margin:0 0 4px; font-size:14px; font-weight:900;">大额支出规划</h4>
+        <span class="f-hint" style="margin-bottom:8px;">以后要花的大钱，按现在的价格填就行。点击快速添加预设：</span>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+          ${PRESETS.map(([k, label]) => `
+            <button type="button" class="btn-pill secondary" style="padding:4px 10px; font-size:11px;" onclick="addOneOffByPreset('${k}')">+ ${label}</button>
           `).join("")}
-          <button type="button" class="btn-pill secondary" onclick="addOneOffPreset()" style="margin-top:6px;">+ 新增大额支出</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${S.oneOffs.map((o, idx) => {
+            const t = ym(o.date);
+            const every = Math.max(0, Math.round(+o.every || 0));
+            let n = 0;
+            if (every > 0) {
+              for (let x = t; x < E; x += every * 12) if (x >= NOW) n++;
+            } else if (t >= NOW && t < E) {
+              n = 1;
+            }
+            let info = "";
+            if (!n) {
+              info = t < NOW && !every ? "这个时间已经过去了，不会计算。" : "这个时间在规划期以外，不会计算。";
+            } else if (every > 0) {
+              info = `规划期内共 ${n} 次，合计 ${+(n * (+o.amount || 0)).toFixed(1)} 万元`;
+            } else {
+              info = `那时你 ${isFinite(b1) ? ageTxt(t - b1) : ""}`;
+            }
+
+            return `
+              <div style="background:#ffffff; border-radius:18px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <input type="text" value="${o.name}" style="font-weight:900; font-size:14px; border:none; outline:none; flex:1;" onchange="updateOneOffItem(${idx}, 'name', this.value)">
+                  <button type="button" class="dial-btn" onclick="removeOneOff(${idx})" title="删除">✕</button>
+                </div>
+
+                <div class="f-row">
+                  <span class="f-label" style="font-size:11.5px;">什么时候首次支出</span>
+                  <div class="f-inp-wrap"><input type="month" value="${o.date}" onchange="updateOneOffItem(${idx}, 'date', this.value)"></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <div class="f-row">
+                    <span class="f-label" style="font-size:11.5px;">每次金额</span>
+                    <div class="f-inp-wrap"><input type="number" step="1" value="${o.amount}" onchange="updateOneOffItem(${idx}, 'amount', +this.value)"><span class="f-unit">万元</span></div>
+                  </div>
+                  <div class="f-row">
+                    <span class="f-label" style="font-size:11.5px;">每隔几年一次</span>
+                    <div class="f-inp-wrap"><input type="number" step="1" value="${o.every || 0}" onchange="updateOneOffItem(${idx}, 'every', Math.round(+this.value))"><span class="f-unit">年</span></div>
+                  </div>
+                </div>
+
+                ${info ? `<span class="f-hint" style="color:var(--brand); font-weight:700;">${info}</span>` : ""}
+              </div>
+            `;
+          }).join("")}
+
+          ${S.oneOffs.length > 0 ? `<span class="f-hint">“每隔几年一次”填 0 表示只花一次；比如换车填 10，就是每 10 年换一次。</span>` : ""}
         </div>
       </div>
     `;
   } else if (activeModalCat === "adv") {
+    const formula = S.pensionMode === "formula";
+
     box.innerHTML = `
       <div class="f-group">
         <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">宏观参数与备用金</h4>
         <div class="f-row">
-          <span class="f-label">长期年均物价上涨率 (通胀率)</span>
+          <span class="f-label">物价每年上涨率 (长期通胀)</span>
           <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.infl}" onchange="updateInput('infl', +this.value)"><span class="f-unit">% / 年</span></div>
+          <span class="f-hint">近两年物价基本持平，稳妥测算一般填 1%~2%。</span>
         </div>
+
         <div class="f-row" style="margin-top:10px;">
-          <span class="f-label">必须留足的安全备用金底仓</span>
+          <span class="f-label">提前退休后至少留的安全备用金</span>
           <div class="f-inp-wrap"><input type="number" step="5" value="${S.floor}" onchange="updateInput('floor', +this.value)"><span class="f-unit">万元</span></div>
-          <span class="f-hint">任何时候存款都不低于此底仓，防止极端大病或特殊变故。</span>
+          <span class="f-hint">应急金、父母备用金等。提前退休期间存款任何时候都不低于这个数，领养老金时还剩这么多。</span>
+        </div>
+
+        <div class="f-row" style="margin-top:10px;">
+          <span class="f-label">领养老金以后的测算模式</span>
+          <div class="f-inp-wrap">
+            <select onchange="updateInput('afterPension', this.value)">
+              <option value="covered" ${S.afterPension === "covered" ? "selected" : ""}>养老金够日常生活，存款只撑到领养老金</option>
+              <option value="model" ${S.afterPension === "model" ? "selected" : ""}>按实际养老金算，存款撑到指定年龄</option>
+            </select>
+          </div>
+        </div>
+
+        ${S.afterPension === "model" ? `
+          <div class="f-row" style="margin-top:8px;">
+            <span class="f-label">存款要撑到你几岁</span>
+            <div class="f-inp-wrap"><input type="number" step="1" value="${S.endAge}" onchange="updateInput('endAge', Math.round(+this.value))"><span class="f-unit">岁</span></div>
+          </div>
+        ` : ""}
+      </div>
+
+      <div class="f-group">
+        <h4 style="margin:0 0 8px; font-size:14px; font-weight:900;">社保和养老金精算</h4>
+        <div class="f-row">
+          <span class="f-label">养老金怎么算</span>
+          <div class="f-inp-wrap">
+            <select onchange="updateInput('pensionMode', this.value)">
+              <option value="formula" ${S.pensionMode === "formula" ? "selected" : ""}>按国家公式精确估算</option>
+              <option value="direct" ${S.pensionMode === "direct" ? "selected" : ""}>直接填每月领取的金额</option>
+            </select>
+          </div>
+        </div>
+
+        ${formula ? `
+          <div class="f-row" style="margin-top:8px;">
+            <span class="f-label">当地养老金计发基数</span>
+            <div class="f-inp-wrap"><input type="number" step="100" value="${S.calcBase}" onchange="updateInput('calcBase', +this.value)"><span class="f-unit">元/月</span></div>
+            <span class="f-hint">各省每年公布，在当地人社部门网站能查到（如 7831）。</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+            <div class="f-row">
+              <span class="f-label" style="font-size:11px;">你已交养老保险</span>
+              <div class="f-inp-wrap"><input type="number" step="1" value="${S.years1}" onchange="updateInput('years1', +this.value)"><span class="f-unit">年</span></div>
+            </div>
+            <div class="f-row">
+              <span class="f-label" style="font-size:11px;">你的缴费指数</span>
+              <div class="f-inp-wrap"><input type="number" step="0.1" value="${S.index1}" onchange="updateInput('index1', +this.value)"></div>
+            </div>
+          </div>
+
+          ${S.hasSpouse ? `
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+              <div class="f-row">
+                <span class="f-label" style="font-size:11px;">伴侣已交养老保险</span>
+                <div class="f-inp-wrap"><input type="number" step="1" value="${S.years2}" onchange="updateInput('years2', +this.value)"><span class="f-unit">年</span></div>
+              </div>
+              <div class="f-row">
+                <span class="f-label" style="font-size:11px;">伴侣缴费指数</span>
+                <div class="f-inp-wrap"><input type="number" step="0.1" value="${S.index2}" onchange="updateInput('index2', +this.value)"></div>
+              </div>
+            </div>
+          ` : ""}
+
+          <span class="f-hint">缴费指数：按最低基数交是 0.6，按平均工资交是 1.0，换过工作取平均值。</span>
+
+          ${st1 ? `
+            <span class="f-hint" style="color:var(--brand); font-weight:700; margin-top:6px;">
+              你 ${Math.floor(st1.date / 12)} 年起领，按政策最少要交 <b>${minYearsAt(st1.date)} 年</b>
+              ${st2 ? `；伴侣 ${Math.floor(st2.date / 12)} 年起领，最少要交 <b>${minYearsAt(st2.date)} 年</b>` : ""}。不够的在提前退休后会自动补足交够。
+            </span>
+          ` : ""}
+        ` : `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+            <div class="f-row">
+              <span class="f-label" style="font-size:11px;">你每月养老金</span>
+              <div class="f-inp-wrap"><input type="number" step="100" value="${S.pension1}" onchange="updateInput('pension1', +this.value)"><span class="f-unit">元</span></div>
+            </div>
+            ${S.hasSpouse ? `
+              <div class="f-row">
+                <span class="f-label" style="font-size:11px;">伴侣每月养老金</span>
+                <div class="f-inp-wrap"><input type="number" step="100" value="${S.pension2}" onchange="updateInput('pension2', +this.value)"><span class="f-unit">元</span></div>
+              </div>
+            ` : ""}
+          </div>
+        `}
+
+        <div class="f-row" style="margin-top:12px;">
+          <span class="f-label">提前退休后的养老保险缴纳方式</span>
+          <div class="f-inp-wrap">
+            <select onchange="updateInput('siAfter', this.value)">
+              <option value="stop" ${S.siAfter === "stop" ? "selected" : ""}>停交（不够法定最低年限就补够）</option>
+              <option value="continue" ${S.siAfter === "continue" ? "selected" : ""}>自己交到正式领养老金</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+          <div class="f-row">
+            <span class="f-label" style="font-size:11px;">自交养老保险</span>
+            <div class="f-inp-wrap"><input type="number" step="50" value="${S.flexPension}" onchange="updateInput('flexPension', +this.value)"><span class="f-unit">元/人/月</span></div>
+          </div>
+          <div class="f-row">
+            <span class="f-label" style="font-size:11px;">自交医保费用</span>
+            <div class="f-inp-wrap"><input type="number" step="50" value="${S.med}" onchange="updateInput('med', +this.value)"><span class="f-unit">元/人/月</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="f-group">
+        <h4 style="margin:0 0 4px; font-size:14px; font-weight:900;">其他被动与副业收入</h4>
+        <span class="f-hint" style="margin-bottom:8px;">工资和养老金以外的确定性收入，比如租金、轻量副业等。</span>
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${(S.incomes || []).map((o, idx) => `
+            <div style="background:#ffffff; border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <input type="text" value="${o.name}" style="font-weight:900; font-size:13.5px; border:none; outline:none;" onchange="updateIncomeItem(${idx}, 'name', this.value)">
+                <button type="button" class="dial-btn" onclick="removeIncome(${idx})">✕</button>
+              </div>
+              <div class="f-row">
+                <span class="f-label" style="font-size:11px;">每月金额</span>
+                <div class="f-inp-wrap"><input type="number" step="100" value="${o.monthly}" onchange="updateIncomeItem(${idx}, 'monthly', +this.value)"><span class="f-unit">元/月</span></div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div class="f-row">
+                  <span class="f-label" style="font-size:11px;">从你几岁开始</span>
+                  <div class="f-inp-wrap"><input type="number" step="1" value="${o.from}" onchange="updateIncomeItem(${idx}, 'from', Math.round(+this.value))"><span class="f-unit">岁</span></div>
+                </div>
+                <div class="f-row">
+                  <span class="f-label" style="font-size:11px;">到你几岁结束(含)</span>
+                  <div class="f-inp-wrap"><input type="number" step="1" value="${o.to}" onchange="updateIncomeItem(${idx}, 'to', Math.round(+this.value))"><span class="f-unit">岁</span></div>
+                </div>
+              </div>
+            </div>
+          `).join("")}
+
+          <button type="button" class="btn-pill secondary" onclick="addNewIncome()" style="justify-content:center;">+ 添加一项其他收入</button>
         </div>
       </div>
     `;
   }
 }
 
-window.updateSpouse = function(val) {
-  S.hasSpouse = val;
-  save();
-  renderModalContent();
-  renderResults();
-};
-
-window.updateInput = function(path, val) {
-  setPath(S, path, val);
-  if (path === "me.birth" || path === "spouse.birth") {
+window.updateStopAge = function(who, val) {
+  if (who === "me") {
+    S.stopAgeMe = val;
     const b1 = ym(S.me.birth);
-    if (isFinite(b1)) S.stopMe = ymStr(b1 + S.stopAgeMe * 12);
-  }
-  save();
-  renderResults();
-};
-
-window.removeOneOff = function(idx) {
-  S.oneOffs.splice(idx, 1);
-  save();
-  renderModalContent();
-  renderResults();
-};
-
-window.addOneOffPreset = function() {
-  S.oneOffs.push({ name: "大额预算", date: ymStr(NOW + 60), amount: 10, every: 0 });
-  save();
-  renderModalContent();
-  renderResults();
-};
-
-window.updateKidsToggle = function(checked) {
-  S.hasKids = checked;
-  if (checked && (!S.children || !S.children.length)) {
-    S.children = [newChild()];
+    if (isFinite(b1)) S.stopMe = ymStr(b1 + val * 12);
+    if (S.together && S.hasSpouse) {
+      S.stopAgeSpouse = val;
+      const b2 = ym(S.spouse.birth);
+      if (isFinite(b2)) S.stopSpouse = ymStr(b2 + val * 12);
+    }
+  } else {
+    S.stopAgeSpouse = val;
+    const b2 = ym(S.spouse.birth);
+    if (isFinite(b2)) S.stopSpouse = ymStr(b2 + val * 12);
   }
   save();
   renderModalContent();
-  renderHeaderPills();
+  renderCompactDials();
   renderResults();
 };
 
-window.setKidBorn = function(idx, born) {
-  const c = S.children[idx];
-  c.born = born;
-  c.date = born ? todayStr : ymStr(NOW + 12);
-  save();
-  renderModalContent();
-  renderResults();
-};
-
-window.updateKidDate = function(idx, date) {
-  S.children[idx].date = date;
+window.updateDebtItem = function(idx, key, val) {
+  S.debts[idx][key] = val;
   save();
   renderModalContent();
   renderHeaderPills();
   renderResults();
 };
 
-window.removeKid = function(idx) {
-  S.children.splice(idx, 1);
-  if (!S.children.length) S.hasKids = false;
+window.removeDebt = function(idx) {
+  S.debts.splice(idx, 1);
   save();
   renderModalContent();
   renderHeaderPills();
   renderResults();
 };
 
-window.addNewKid = function() {
-  if (!S.children) S.children = [];
-  S.children.push(newChild());
+window.addNewDebt = function() {
+  if (!S.debts) S.debts = [];
+  S.debts.push({ name: "车贷", monthly: 2000, end: ymStr(NOW + 35) });
   save();
   renderModalContent();
   renderHeaderPills();
   renderResults();
 };
 
-window.updateStageCost = function(idx, val) {
-  S.stage[idx] = val;
+window.addOneOffByPreset = function(presetKey) {
+  S.oneOffs.push(presetItem(S, presetKey));
   save();
+  renderModalContent();
   renderResults();
 };
 
+window.updateOneOffItem = function(idx, key, val) {
+  S.oneOffs[idx][key] = val;
+  save();
+  renderModalContent();
+  renderResults();
+};
+
+window.updateIncomeItem = function(idx, key, val) {
+  S.incomes[idx][key] = val;
+  save();
+  renderModalContent();
+  renderResults();
+};
+
+window.removeIncome = function(idx) {
+  S.incomes.splice(idx, 1);
+  save();
+  renderModalContent();
+  renderResults();
+};
+
+window.addNewIncome = function() {
+  if (!S.incomes) S.incomes = [];
+  const a0 = stopAgeYears(S);
+  S.incomes.push({ name: "其他收入", monthly: 1000, from: a0, to: a0 + 9 });
+  save();
+  renderModalContent();
+  renderResults();
+};
 // 按钮监听绑定
 document.getElementById("btn-open-modal").addEventListener("click", openFinanceModal);
 document.getElementById("btn-profile-pill").addEventListener("click", openFinanceModal);
