@@ -1320,6 +1320,18 @@ const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
 
 const ageYears = (p, t, b) => Math.floor((p.now + t - b) / 12);
 
+function kidCost(s, c, now) {
+  const b = ym(c.date);
+  if (!isFinite(b) || (!c.born && b < now)) return 0;
+  const edu = realRate(s.eduGrowth, s.infl);
+  let total = c.born ? 0 : s.birthCost * 1e4;
+  for (let t = Math.max(0, b - now); t - (b - now) < CHILD_MONTHS; t++) {
+    const age = t - (b - now);
+    total += (+s.stage[stageIdx(Math.floor(age / 12))] || 0) * Math.pow(1 + edu, t / 12);
+  }
+  return total;
+}
+
 function oneOffAt(o, t) {
   if (o.every > 0) {
     const k = t - o.t;
@@ -1786,10 +1798,10 @@ function bodyKids() {
           const age = NOW - b;
           if (age < 0) return derived("出生日期不能晚于今天。", true);
           if (age >= CHILD_MONTHS) return derived(`已经 ${ageTxt(age)}，满 22 岁了，不再计算花费。`);
-          return derived(`现在 <b>${ageTxt(age)}</b>，${STAGE_NAMES[stageIdx(Math.floor(age / 12))]}阶段；还要抚养约 <b>${durTxt(CHILD_MONTHS - age)}</b>（到 22 岁）。`);
+          return derived(`现在 <b>${ageTxt(age)}</b>，${STAGE_NAMES[stageIdx(Math.floor(age / 12))]}阶段；还要抚养约 <b>${durTxt(CHILD_MONTHS - age)}</b>（到 22 岁）。从现在到大学毕业总共约花 <b>${wan(kidCost(S, c, NOW))}</b>。`);
         }
         if (b < NOW) return derived("计划出生时间要晚于现在；已经出生的请选“已出生”。", true);
-        return derived(`那时你 <b>${ageTxt(b - b1)}</b>。当月算一次性生育费用 ${S.birthCost} 万，之后按年龄段算花费，到 ${fmtYM(b + CHILD_MONTHS - 1)}。`);
+        return derived(`那时你 <b>${ageTxt(b - b1)}</b>。当月算一次性生育费用 ${S.birthCost} 万，之后按年龄段算花费，到 ${fmtYM(b + CHILD_MONTHS - 1)}。养到大学毕业总共约花 <b>${wan(kidCost(S, c, NOW))}</b>（含生育费用）。`);
       };
       return `<div class="item">
         <div class="item-head"><span>孩子 ${i + 1}</span>
@@ -1802,7 +1814,7 @@ function bodyKids() {
     .join("");
   const costs = `<details class="sub" data-sub="kid-costs"><summary>每个孩子每月花多少</summary><div class="sub-body">
     <div class="grid-2f">${STAGES.map((l, i) => num(`stage.${i}`, l, "元")).join("")}</div>
-    <div class="hint" style="margin:-4px 0 12px">可以把育儿补贴、老人帮带的补贴算进对应阶段。只供到高中就把大学填 0。</div>
+    <div class="hint" style="margin:-4px 0 12px">可以把育儿补贴、老人帮带的补贴算进对应阶段。只供到高中就把大学填 0。“养到大学毕业总共约花”按这里的每月花费加上每年上涨算，没有扣掉少交的个税。</div>
     ${num("birthCost", "备孕和生孩子（一次性）", "万", { hint: "只对计划中的孩子算" })}
     ${num("eduGrowth", "孩子花费每年涨多少", "%")}
     ${num("childTax", "上班期间每个孩子每月少交的个税", "元", { hint: "子女教育、婴幼儿照护专项扣除省下的税" })}
@@ -1945,7 +1957,8 @@ const CATS = [
     sum() {
       if (!S.hasKids || !S.children.length) return "没有";
       const born = S.children.filter((c) => c.born).length, plan = S.children.length - born;
-      return [born ? `已有 ${born} 个` : "", plan ? `计划 ${plan} 个` : ""].filter(Boolean).join(" · ");
+      const total = S.children.reduce((sum, c) => sum + kidCost(S, c, NOW), 0);
+      return [born ? `已有 ${born} 个` : "", plan ? `计划 ${plan} 个` : "", total > 0 ? `养到大学毕业共约 ${wan(total)}` : ""].filter(Boolean).join(" · ");
     },
   },
   { id: "big", title: "大额支出", body: bodyBig, sum: () => (S.oneOffs.length ? S.oneOffs.map((o) => o.name).join("、") : "没有") },
