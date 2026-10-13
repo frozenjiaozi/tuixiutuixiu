@@ -494,10 +494,6 @@
   .plan-panel {
     border-radius: 28px;
     padding: 24px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 18px;
   }
   .plan-panel.ok { background: linear-gradient(135deg, #ecfdf5 0%, rgba(240, 253, 250, 0.7) 100%); --plan-label: rgba(6, 78, 59, 0.7); --plan-line: rgba(167, 243, 208, 0.8); --plan-title: #022c22; }
   .plan-panel.fail { background: linear-gradient(135deg, #fff1f2 0%, rgba(255, 251, 235, 0.6) 100%); --plan-label: rgba(136, 19, 55, 0.7); --plan-line: rgba(254, 205, 211, 0.8); --plan-title: #4c0519; }
@@ -520,11 +516,16 @@
     font-weight: 900;
     color: var(--plan-title);
   }
-  /* 主数字：退休时需要准备的存款 */
-  .plan-need-label { margin: 20px 0 0; font-size: 13px; font-weight: 700; color: var(--plan-label); }
+  /* 主数字：退休时需要准备的存款，右边是届时预计拥有 */
+  .plan-need-row { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: 40px; row-gap: 16px; }
+  .plan-need-row > div { min-width: 0; }
+  .plan-need-label { margin: 0; font-size: 13px; font-weight: 700; color: var(--plan-label); }
   .plan-need-val { margin: 2px 0 0; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
-  .plan-panel.ok .plan-need-val { color: #047857; }
-  .plan-panel.fail .plan-need-val { color: #e11d48; }
+  .plan-panel.ok .plan-need-val { color: #065f46; }
+  .plan-panel.fail .plan-need-val { color: #881337; }
+  .plan-panel .plan-need-val.have { color: #0d9488; }
+  .plan-panel .plan-need-val.danger { color: #e11d48; }
+  .plan-need-val b.text { font-size: 22px; }
   .plan-need-val b { font-size: 56px; font-weight: 950; letter-spacing: -0.03em; line-height: 1; }
   .plan-need-val span { font-size: 20px; font-weight: 900; opacity: 0.8; }
 
@@ -543,23 +544,10 @@
   .plan-stat-val b { font-size: 28px; font-weight: 950; letter-spacing: -0.02em; line-height: 1.1; }
   .plan-stat-val b.text { font-size: 15px; }
   .plan-stat-val span { font-size: 12px; font-weight: 800; opacity: 0.75; }
-  .plan-panel.ok .plan-stat-val.have { color: #0f766e; }
-  .plan-panel.fail .plan-stat-val.have { color: #9f1239; }
+  .plan-panel.ok .plan-stat-val.gap { color: #059669; }
+  .plan-panel.fail .plan-stat-val.gap { color: #e11d48; }
   .plan-stat-val.ceil { color: #b45309; }
   .plan-panel .plan-stat-val.danger { color: #e11d48; }
-
-  /* 差额与达成进度 */
-  .plan-progress-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; }
-  .plan-progress-gap { font-weight: 900; }
-  .plan-panel.ok .plan-progress-gap { color: var(--brand); }
-  .plan-panel.fail .plan-progress-gap { color: var(--rose); }
-  .plan-progress-pct { font-weight: 700; color: var(--plan-label); font-variant-numeric: tabular-nums; }
-  .plan-progress-bar { height: 10px; border-radius: 999px; overflow: hidden; }
-  .plan-panel.ok .plan-progress-bar { background: #d1fae5; }
-  .plan-panel.fail .plan-progress-bar { background: #ffe4e6; }
-  .plan-progress-bar i { display: block; height: 100%; border-radius: 999px; }
-  .plan-panel.ok .plan-progress-bar i { background: linear-gradient(90deg, #10b981, #2dd4bf); }
-  .plan-panel.fail .plan-progress-bar i { background: linear-gradient(90deg, #f43f5e, #fb923c); }
 
   .safety-tip {
     margin-top: 20px;
@@ -995,7 +983,7 @@
       border-radius: 22px;
       padding: 16px 14px;
     }
-    .plan-need-label { margin-top: 16px; }
+    .plan-need-row { margin-top: 16px; column-gap: 28px; }
     .plan-need-val b { font-size: 44px; }
     .plan-need-val span { font-size: 17px; }
     .plan-stats { margin-top: 16px; padding-top: 14px; }
@@ -2075,7 +2063,6 @@ function renderResults() {
   const lossPerm = jobAges.map((x) => analyze({ ...p, shock1: [[x, 999, 0]], shock2: [] }).ceiling);
   const plan = assetPath(p, a, p.livingWork);
   const ok = a.gap >= 0;
-  const planPct = a.need > 0 ? Math.max(0, (a.have / a.need) * 100) : 100;
   const planCeil = isFinite(a.ceiling) && floor100(a.ceiling) >= 1000 ? `${fmt(floor100(a.ceiling))} 元/月` : null;
   const ageAt = (t, b = p.b1) => Math.floor((NOW + t - b) / 12);
   const eShort = (e) => (e != null ? `${shortYM(NOW + e)} · ${ageAt(e)} 岁` : "75 岁后");
@@ -2220,26 +2207,26 @@ function renderResults() {
               <span class="plan-tag">${ok ? "完全可行" : "仍有差额"}</span>
             </div>
             <h3 class="plan-title">如果 ${stopAge}退休 <span style="font-size:12px; font-weight:700; color:var(--plan-label);">${shortYM(stopIdx)}</span></h3>
-            <p class="plan-need-label">退休时需要准备的存款</p>
-            <p class="plan-need-val">${moneyHtml(wan(a.need))}</p>
+            <div class="plan-need-row">
+              <div>
+                <p class="plan-need-label">退休时需要准备的存款</p>
+                <p class="plan-need-val">${moneyHtml(wan(a.need))}</p>
+              </div>
+              <div>
+                <p class="plan-need-label">届时预计拥有</p>
+                <p class="plan-need-val have ${a.have < 0 ? "danger" : ""}">${moneyHtml(a.have >= 0 ? wan(a.have) : "撑不到那时")}</p>
+              </div>
+            </div>
             <div class="plan-stats">
               <div class="plan-stat">
-                <p class="plan-stat-label">届时预计拥有</p>
-                <p class="plan-stat-val have ${a.have < 0 ? "danger" : ""}">${moneyHtml(a.have >= 0 ? wan(a.have) : "撑不到那时")}</p>
+                <p class="plan-stat-label">${ok ? "比需要的多出" : "比需要的还差"}</p>
+                <p class="plan-stat-val gap">${moneyHtml(wan(Math.abs(a.gap)))}</p>
               </div>
               <div class="plan-stat">
                 <p class="plan-stat-label">${ok ? "工作期间每月最多花" : "每月需降到"}</p>
                 <p class="plan-stat-val ceil ${planCeil ? "" : "danger"}">${moneyHtml(planCeil || "光省钱不够")}</p>
               </div>
             </div>
-          </div>
-
-          <div>
-            <div class="plan-progress-head">
-              <span class="plan-progress-gap">${ok ? `比需要的多出 ${wan(a.gap)}` : `比需要的还差 ${wan(-a.gap)}`}</span>
-              <span class="plan-progress-pct">已准备 ${planPct.toFixed(1)}%</span>
-            </div>
-            <div class="plan-progress-bar"><i style="width:${Math.min(100, planPct)}%;"></i></div>
           </div>
         </div>
       </div>
