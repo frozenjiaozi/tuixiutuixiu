@@ -413,8 +413,12 @@
   .ym select:last-child {
     flex: 1;
   }
-  .inp input[type="date"] {
-    min-height: 37px;
+  .ymd select {
+    flex: 1;
+    min-width: 0;
+  }
+  .ymd select:first-child {
+    flex: 1.35;
   }
   .seg-sm {
     display: inline-flex;
@@ -1679,8 +1683,15 @@ function select(path, label, options, hint) {
   const opts = options.map(([v, l]) => `<option value="${v}" ${cur === v ? "selected" : ""}>${l}</option>`).join("");
   return `<div class="field"><label>${label}</label><select data-path="${path}" data-kind="select">${opts}</select>${hintHTML(hint)}</div>`;
 }
+const daysIn = (y, m) => new Date(y, m, 0).getDate();
 function dateField(path, label, hint) {
-  return `<div class="field"><label>${label}</label><div class="inp"><input type="date" data-path="${path}" data-kind="date" value="${esc(val(path) || "")}" min="1920-01-01" max="${todayStr}"></div>${hintHTML(hint)}</div>`;
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val(path) || "");
+  const Y = d ? +d[1] : thisYear - 30, M = d ? +d[2] : 1, D = d ? +d[3] : 1;
+  let ys = "", ms = "", ds = "";
+  for (let y = Math.max(thisYear, Y); y >= Math.min(1920, Y); y--) ys += `<option value="${y}" ${y === Y ? "selected" : ""}>${y} 年</option>`;
+  for (let m = 1; m <= 12; m++) ms += `<option value="${m}" ${m === M ? "selected" : ""}>${m} 月</option>`;
+  for (let x = 1; x <= daysIn(Y, M); x++) ds += `<option value="${x}" ${x === D ? "selected" : ""}>${x} 日</option>`;
+  return `<div class="field"><label>${label}</label><div class="ym ymd" data-ymd="${path}"><select aria-label="年">${ys}</select><select aria-label="月">${ms}</select><select aria-label="日">${ds}</select></div>${hintHTML(hint)}</div>`;
 }
 function ymField(path, label, from, to, hint) {
   const i = ym(val(path));
@@ -1736,7 +1747,8 @@ function personHTML(key, who) {
   };
   return `<div class="person">
     <div class="person-title"><span>${who}</span></div>
-    ${two(dateField(`${key}.birth`, "出生日期"), select(`${key}.gender`, "性别", GENDER_OPTS))}
+    ${dateField(`${key}.birth`, "出生日期")}
+    ${select(`${key}.gender`, "性别", GENDER_OPTS)}
     ${live(`person-${key}`, info)}
   </div>`;
 }
@@ -2100,6 +2112,16 @@ formEl.addEventListener("input", (e) => {
 
 formEl.addEventListener("change", (e) => {
   const el = e.target;
+  const dbox = el.closest("[data-ymd]");
+  if (dbox) {
+    const [y, m, d] = [...dbox.querySelectorAll("select")].map((s) => +s.value);
+    const pad = (n) => String(n).padStart(2, "0");
+    setPath(S, dbox.dataset.ymd, `${y}-${pad(m)}-${pad(Math.min(d, daysIn(y, m)))}`);
+    save();
+    renderForm();
+    renderResults();
+    return;
+  }
   const box = el.closest("[data-ym]");
   if (box) {
     const [y, m] = [...box.querySelectorAll("select")].map((s) => +s.value);
@@ -2108,13 +2130,6 @@ formEl.addEventListener("change", (e) => {
     return;
   }
   const path = el.dataset.path, kind = el.dataset.kind;
-  if (kind === "date") {
-    const y = +el.value.slice(0, 4);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(el.value) || y < 1920 || y > thisYear + 30) return;
-    setPath(S, path, el.value);
-    softUpdate();
-    return;
-  }
   if (kind !== "bool" && kind !== "select" && kind !== "nsel") return;
   setPath(S, path, kind === "bool" ? el.checked : kind === "nsel" ? Number(el.value) : el.value);
   if (path === "hasKids" && S.hasKids && !S.children.length) S.children.push(newChild());
