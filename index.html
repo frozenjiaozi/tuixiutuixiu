@@ -1218,8 +1218,6 @@ const DEFAULTS = {
   calcBase: 7831, years1: 7, index1: 0.6, years2: 7, index2: 0.6,
   siAfter: "stop", flexPension: 940, med: 595,
   incomes: [],
-  shock1: { from: null, gap: 1, factor: 50 },
-  shock2: { from: null, gap: 1, factor: 70 },
   rates: "nominal",
 };
 
@@ -1271,13 +1269,6 @@ function factorAt(bands, a) {
   return f;
 }
 
-function shockBands(sh) {
-  if (!sh || sh.from === null || sh.from === "" || !isFinite(sh.from)) return [];
-  const from = Math.round(+sh.from);
-  const gap = Math.max(0, Math.round(+sh.gap || 0));
-  return [[from, from + gap, 0], [from + gap, 999, Math.max(0, +sh.factor || 0) / 100]];
-}
-
 function pensionMonthly(base, index, years, claimAge) {
   const basic = (base * (1 + index)) / 2 * years / 100;
   const account = base * index * 0.08 * 12 * years;
@@ -1310,7 +1301,7 @@ function toParams(s, now) {
     siAfter: s.siAfter, flex: s.flexPension, med: s.med,
     oneOffs: s.oneOffs.map((o) => ({ name: o.name, t: ym(o.date) - now, amount: (+o.amount || 0) * 1e4, every: Math.max(0, Math.round(+o.every || 0)) })),
     incomes: s.incomes.map((o) => ({ name: o.name, amount: +o.monthly || 0, from: o.from, to: o.to })),
-    shock1: shockBands(s.shock1), shock2: sp ? shockBands(s.shock2) : [],
+    shock1: [], shock2: [],
   };
 }
 
@@ -1880,13 +1871,6 @@ function renderIncomes() {
     <button class="btn-sm" data-action="add" data-list="incomes">＋ 添加一项</button>`;
 }
 
-function renderShocks() {
-  const one = (key, who) => `<div class="row-item"><span>${who}</span>${numInput(`${key}.from`, S[key].from, "opt")}<span>岁起失业</span>${numInput(`${key}.gap`, S[key].gap, "int")}<span>年</span></div>
-    <div class="row-item"><span>之后收入是原来的</span>${numInput(`${key}.factor`, S[key].factor, "num")}<span>%</span></div>`;
-  return `<div class="hint" style="margin-bottom:8px">年龄空着表示不考虑。填了以后，所有结果都按这种情况算。不管填不填，右边的压力测试都会另外测几种常见情况。</div>
-    ${one("shock1", "你")}${S.hasSpouse ? one("shock2", "伴侣") : ""}`;
-}
-
 function bodyAdv() {
   const sp = S.hasSpouse, formula = S.pensionMode === "formula";
   const minInfo = () => {
@@ -1915,9 +1899,7 @@ function bodyAdv() {
     ${num("flexPension", "自己交养老保险，每人每月", "元", { hint: "按当地灵活就业人员的最低档填" })}
     ${num("med", "提前退休后自己交医保，每人每月", "元", { hint: "交到领养老金为止；按当地灵活就业人员职工医保的标准填" })}
     <div class="sub-title">其他收入</div>
-    ${renderIncomes()}
-    <div class="sub-title">职业风险（放进计划里）</div>
-    ${renderShocks()}`;
+    ${renderIncomes()}`;
 }
 
 const CATS = [
@@ -2461,7 +2443,6 @@ function renderResults() {
   const ageAt = (t, b = p.b1) => Math.floor((NOW + t - b) / 12);
   const eLong = (e) => (e != null ? `${fmtYM(NOW + e)}（${ageTxt(NOW + e - p.b1)}）` : "75 岁前都不行");
   const eShort = (e) => (e != null ? `${shortYM(NOW + e)} · ${ageAt(e)} 岁` : "75 岁后");
-  const shocked = p.shock1.length || p.shock2.length;
 
   let concl;
   if (ok) {
@@ -2587,7 +2568,7 @@ function renderResults() {
     p.covered
       ? `按“养老金够日常生活”算：存款只需撑到 ${fmtYM(NOW + p.lastP)}${sp ? "（两人都开始领养老金）" : "（开始领养老金）"}，那时还剩 ${wan(p.floor)}备用金。`
       : `存款按实际养老金一直算到你 ${p.endAge} 岁。`
-  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。${shocked ? "已按你在“高级设置”里填的职业风险计算。" : ""}</p>
+  }“每月花”指工作期间家庭日常开销，不含房贷、其他负债和孩子；存款数字已经扣掉了这些和大额支出。</p>
 
   <section>
     <h2>现在每月的钱</h2>
@@ -2638,7 +2619,7 @@ function renderResults() {
         </tbody>
       </table>
     </div>
-    <p class="muted" style="margin-top:6px"><span class="pill success">绿色</span> 安全垫 20 万以上 <span class="pill warn">黄色</span> 够，但安全垫不到 20 万 <span class="pill danger">红色</span> 有缺口。“当前设定”包含你在高级设置里填的职业风险；其他职业情况会替换掉它。</p>
+    <p class="muted" style="margin-top:6px"><span class="pill success">绿色</span> 安全垫 20 万以上 <span class="pill warn">黄色</span> 够，但安全垫不到 20 万 <span class="pill danger">红色</span> 有缺口。职业情况的几行都是在你选的工作前景基础上再算。</p>
   </section>
 
   <section>
