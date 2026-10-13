@@ -234,6 +234,31 @@
     font-weight: 700;
     color: var(--text);
   }
+  .form-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 2px;
+  }
+  .form-head-row .form-title {
+    margin: 0;
+  }
+  .btn-reset {
+    flex: none;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-3);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .btn-reset:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
   .form-head p {
     margin: 0;
     font-size: 12px;
@@ -1986,7 +2011,7 @@ const formEl = document.getElementById("form");
 function renderForm() {
   LIVE = new Map();
   formEl.innerHTML =
-    `<div class="form-head"><div class="form-title">填写你的情况</div><p>按分类填写，右边的结果会实时更新。填过的内容自动保存在这个浏览器里，下次打开不用重填；不会上传到任何地方。</p></div>` +
+    `<div class="form-head"><div class="form-head-row"><div class="form-title">填写你的情况</div><button type="button" class="btn-reset" data-action="reset">重置</button></div><p>按分类填写，右边的结果会实时更新。填过的内容自动保存在这个浏览器里，下次打开不用重填；不会上传到任何地方。</p></div>` +
     CATS.map((c, i) => {
       const open = OPEN.has(c.id);
       return `<div class="cat${open ? " open" : ""}" data-cat="${c.id}">
@@ -2086,7 +2111,10 @@ formEl.addEventListener("click", (e) => {
   if (!b) return;
   e.preventDefault();
   const act = b.dataset.action, list = b.dataset.list;
-  if (act === "del") {
+  if (act === "reset") {
+    if (!confirm("确定把所有填写内容恢复成默认值吗？现在填的内容会被清掉。")) return;
+    S = clone(DEFAULTS);
+  } else if (act === "del") {
     S[list].splice(+b.dataset.i, 1);
   } else if (act === "kid") {
     const c = S.children[+b.dataset.i];
