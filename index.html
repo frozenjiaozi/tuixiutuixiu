@@ -883,15 +883,15 @@
       display: none !important;
     }
 
-    /* 移动端展示已设置核心信息卡片 */
+    /* 移动端展示已设置核心信息 (纯信息直接展示，无标题) */
     .mobile-profile-card {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(12px);
       border-radius: 20px;
-      padding: 13px 14px;
+      padding: 10px 12px;
       cursor: pointer;
       box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
       transition: all 0.15s ease;
@@ -903,50 +903,19 @@
       transform: scale(0.99);
       background: #ffffff;
     }
-    .m-profile-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .m-profile-title {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 800;
-      color: var(--text-2);
-    }
-    .m-profile-title svg {
-      color: var(--brand);
-    }
-    .m-profile-edit-btn {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--brand);
-    }
-    .m-profile-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-    }
     .m-profile-chip {
       display: flex;
       align-items: center;
       justify-content: space-between;
       background: #f8fafc;
-      padding: 8px 10px;
-      border-radius: 12px;
-      font-size: 11.5px;
-    }
-    .m-chip-label {
-      font-weight: 700;
-      color: var(--text-4);
+      padding: 9px 12px;
+      border-radius: 14px;
+      font-size: 12px;
     }
     .m-chip-val {
       font-weight: 900;
       color: var(--text);
       font-variant-numeric: tabular-nums;
-      margin: 0 4px;
     }
 
     .top-wrapper {
@@ -1170,28 +1139,24 @@
     </div>
 
     <div class="header-actions">
-      <!-- 动态家庭画像胶囊 (点击直达编辑弹窗) -->
+      <!-- 动态家庭画像胶囊 (纯信息展示，无前缀标题) -->
       <button type="button" class="profile-pill" id="btn-profile-pill" title="点击查看并编辑完整家庭财务信息">
         <div class="profile-pill-item">
-          <span class="profile-pill-label">家庭</span>
           <span class="profile-pill-val" id="pill-marital-val">已婚</span>
           <span class="pill-badge indigo" id="pill-marital-badge">两人</span>
         </div>
         <div class="profile-pill-sep"></div>
         <div class="profile-pill-item">
-          <span class="profile-pill-label">抚养</span>
           <span class="profile-pill-val" id="pill-kid-val">无孩</span>
           <span class="pill-badge slate" id="pill-kid-badge">轻装</span>
         </div>
         <div class="profile-pill-sep"></div>
         <div class="profile-pill-item">
-          <span class="profile-pill-label">负债</span>
           <span class="profile-pill-val" id="pill-mort-val">无房贷</span>
           <span class="pill-badge emerald" id="pill-mort-badge">无按揭</span>
         </div>
         <div class="profile-pill-sep"></div>
         <div class="profile-pill-item">
-          <span class="profile-pill-label">资产</span>
           <span class="profile-pill-val" id="pill-asset-val">5万</span>
           <span class="pill-badge emerald">储备</span>
         </div>
@@ -1219,36 +1184,23 @@
 
 <!-- 主内容画卷 (单页直接顺畅滚动) -->
 <div class="main-canvas" id="main-canvas">
-  <!-- 移动端专属：已设置核心信息展示卡片 (点击直达编辑，PC端隐藏) -->
-  <button type="button" class="mobile-profile-card" id="mobile-profile-card" onclick="openFinanceModal()" title="点击查看并编辑完整家庭财务信息">
-    <div class="m-profile-header">
-      <div class="m-profile-title">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>已设核心信息</span>
-      </div>
-      <span class="m-profile-edit-btn">点击修改 ›</span>
+  <!-- 移动端专属：已设置核心信息展示 (纯信息呈现，无多余标题) -->
+  <button type="button" class="mobile-profile-card" id="mobile-profile-card" onclick="openFinanceModal()" title="点击编辑家庭财务信息">
+    <div class="m-profile-chip">
+      <span class="m-chip-val" id="m-pill-marital-val">已婚</span>
+      <span class="pill-badge indigo" id="m-pill-marital-badge">两人</span>
     </div>
-    <div class="m-profile-grid">
-      <div class="m-profile-chip">
-        <span class="m-chip-label">家庭</span>
-        <span class="m-chip-val" id="m-pill-marital-val">已婚</span>
-        <span class="pill-badge indigo" id="m-pill-marital-badge">两人</span>
-      </div>
-      <div class="m-profile-chip">
-        <span class="m-chip-label">抚养</span>
-        <span class="m-chip-val" id="m-pill-kid-val">无孩</span>
-        <span class="pill-badge slate" id="m-pill-kid-badge">轻装</span>
-      </div>
-      <div class="m-profile-chip">
-        <span class="m-chip-label">负债</span>
-        <span class="m-chip-val" id="m-pill-mort-val">无房贷</span>
-        <span class="pill-badge emerald" id="m-pill-mort-badge">无按揭</span>
-      </div>
-      <div class="m-profile-chip">
-        <span class="m-chip-label">资产</span>
-        <span class="m-chip-val" id="m-pill-asset-val">5万</span>
-        <span class="pill-badge emerald">储备</span>
-      </div>
+    <div class="m-profile-chip">
+      <span class="m-chip-val" id="m-pill-kid-val">无孩</span>
+      <span class="pill-badge slate" id="m-pill-kid-badge">轻装</span>
+    </div>
+    <div class="m-profile-chip">
+      <span class="m-chip-val" id="m-pill-mort-val">无房贷</span>
+      <span class="pill-badge emerald" id="m-pill-mort-badge">无按揭</span>
+    </div>
+    <div class="m-profile-chip">
+      <span class="m-chip-val" id="m-pill-asset-val">5万</span>
+      <span class="pill-badge emerald">储备</span>
     </div>
   </button>
 
