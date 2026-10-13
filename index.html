@@ -873,38 +873,45 @@
 
   /* 移动端全面深度适配 */
   @media (max-width: 768px) {
+    .top-wrapper {
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
     .top {
-      padding: 12px 16px;
-      gap: 12px;
+      padding: 10px 16px;
+      gap: 8px;
     }
     .brand-logo {
-      width: 40px;
-      height: 40px;
-      border-radius: 14px;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
     }
     .brand-logo svg {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
     }
     .brand-text h1 {
-      font-size: 20px;
+      font-size: 19px;
+    }
+    .brand-text .sub {
+      display: none;
     }
     .header-actions {
       width: 100%;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 6px;
     }
     .btn-pill {
       padding: 6px 12px;
       font-size: 11.5px;
     }
     .main-canvas {
-      padding: 16px 12px 64px;
-      gap: 16px;
+      padding: 14px 12px 64px;
+      gap: 14px;
     }
     .bento-card {
       border-radius: 24px;
-      padding: 20px 16px;
+      padding: 18px 14px;
     }
     .dials-grid {
       grid-template-columns: 1fr;
@@ -916,11 +923,11 @@
     }
     .answer-grid {
       grid-template-columns: 1fr;
-      gap: 20px;
+      gap: 18px;
     }
     .earliest-headline .prefix,
     .earliest-headline .suffix {
-      font-size: 18px;
+      font-size: 17px;
     }
     .earliest-headline .hero-age {
       font-size: 32px;
@@ -940,22 +947,57 @@
     }
     .plan-panel {
       border-radius: 22px;
-      padding: 18px 16px;
+      padding: 16px 14px;
     }
     .plan-gap {
       font-size: 28px;
     }
+
+    /* 4 个关键事实移动端：优雅 2 列 Bento 磁贴 */
     .facts-grid {
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 8px;
     }
     .fact-card {
       border-radius: 20px;
-      padding: 14px;
+      padding: 14px 12px;
+      min-height: 118px;
+      gap: 8px;
+    }
+    .fact-top {
+      gap: 4px;
+    }
+    .fact-icon-wrap {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+    }
+    .fact-icon-wrap svg {
+      width: 13px;
+      height: 13px;
+    }
+    .fact-pill {
+      font-size: 9.5px;
+      padding: 2px 6px;
+    }
+    .fact-label {
+      font-size: 11px;
+      line-height: 1.25;
     }
     .fact-num {
-      font-size: 24px;
+      font-size: 21px;
+      margin: 2px 0 0;
+      line-height: 1.15;
     }
+    .fact-num span {
+      font-size: 10px;
+    }
+    .fact-sub {
+      font-size: 10px;
+      margin: 2px 0 0;
+      line-height: 1.2;
+    }
+
     .ck-grid {
       grid-template-columns: repeat(2, 1fr);
       gap: 8px;
@@ -1022,12 +1064,6 @@
     }
     .modal-foot {
       padding: 12px 18px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .facts-grid {
-      grid-template-columns: 1fr;
     }
   }
 
@@ -1900,7 +1936,7 @@ function renderResults() {
         <div class="plan-panel ${ok ? "ok" : "fail"}">
           <div>
             <div class="plan-head">
-              <span style="font-size:11px; font-weight:900; letter-spacing:0.04em; color:var(--text-4);">YOUR RETIREMENT PLAN</span>
+              <span style="font-size:11px; font-weight:900; letter-spacing:0.02em; color:var(--text-4);">你的计划目标</span>
               <span class="plan-tag">${ok ? "完全可行" : "仍有差额"}</span>
             </div>
             <h3 class="plan-title">如果 ${stopAge}退休 <span style="font-size:12px; font-weight:600; color:var(--text-4);">${shortYM(stopIdx)}</span></h3>
