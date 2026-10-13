@@ -3050,17 +3050,17 @@ function renderModalContent() {
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
               <div class="f-row">
                 <span class="f-label">备孕与生育一次性开销</span>
-                <div class="f-inp-wrap"><input type="number" step="1" value="${S.birthCost || 5}" onchange="updateInput('birthCost', +this.value)"><span class="f-unit">万元</span></div>
+                <div class="f-inp-wrap"><input type="number" step="1" value="${S.birthCost}" onchange="updateInput('birthCost', +this.value)"><span class="f-unit">万元</span></div>
               </div>
               <div class="f-row">
                 <span class="f-label">教育与花费每年涨幅</span>
-                <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.eduGrowth || 3}" onchange="updateInput('eduGrowth', +this.value)"><span class="f-unit">%</span></div>
+                <div class="f-inp-wrap"><input type="number" step="0.5" value="${S.eduGrowth}" onchange="updateInput('eduGrowth', +this.value)"><span class="f-unit">%</span></div>
               </div>
             </div>
 
             <div class="f-row">
               <span class="f-label">每月子女教育个税抵扣省税</span>
-              <div class="f-inp-wrap"><input type="number" step="50" value="${S.childTax || 400}" onchange="updateInput('childTax', +this.value)"><span class="f-unit">元/月</span></div>
+              <div class="f-inp-wrap"><input type="number" step="50" value="${S.childTax}" onchange="updateInput('childTax', +this.value)"><span class="f-unit">元/月</span></div>
               <span class="f-hint">子女教育、婴幼儿照护专项附加扣除每月节省的个税。</span>
             </div>
           </div>
