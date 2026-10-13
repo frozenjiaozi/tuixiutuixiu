@@ -1206,14 +1206,14 @@ const DEFAULTS = {
   spouse: { birth: "1997-06-20", gender: "female55" },
   assets: 5,
   stopMe: "2044-03", together: true, stopSpouse: "2044-03",
-  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, incGrowth: 2,
+  inc1: 5000, inc2: 5000, bonus1: 0, bonus2: 0, outlook: "stable", upRate: 3, downRate: 3,
   hasMortgage: true, mortMonthly: 2500, mortEnd: "2046-09", hfOffset: 1000,
   debts: [],
   livingWork: 5000, livingBridge: 3000, livingPension: 3000,
   hasKids: false, children: [],
   stage: [3200, 2500, 2500, 3000, 3500, 3000], birthCost: 5, eduGrowth: 3, childTax: 400,
   oneOffs: [{ name: "换车", date: "2032-06", amount: 10, every: 0 }],
-  ret: 2, infl: 2, floor: 20, afterPension: "covered", endAge: 85,
+  ret: 2, infl: 1, floor: 20, afterPension: "covered", endAge: 85,
   pensionMode: "formula", pension1: 2300, pension2: 2100,
   calcBase: 7831, years1: 7, index1: 0.6, years2: 7, index2: 0.6,
   siAfter: "stop", flexPension: 940, med: 595,
@@ -1296,7 +1296,7 @@ function toParams(s, now) {
   return {
     now, sp, b1, b2, st1, st2, P1, P2, T1, T2, together: !!s.together, covered, lastP,
     endAge: s.endAge, E: covered ? lastP : b1 + s.endAge * 12 - now,
-    inc1: s.inc1, inc2: sp ? s.inc2 : 0, bonus1: (s.bonus1 * 1e4) / 12, bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0, g: realRate(s.incGrowth, s.infl),
+    inc1: s.inc1, inc2: sp ? s.inc2 : 0, bonus1: (s.bonus1 * 1e4) / 12, bonus2: sp ? (s.bonus2 * 1e4) / 12 : 0, g: realRate(incomeGrowth(s), s.infl),
     assets: s.assets * 1e4, r: realRate(s.ret, s.infl), infl: s.infl / 100, floor: s.floor * 1e4,
     livingWork: s.livingWork, livingBridge: s.livingBridge, livingPension: s.livingPension,
     mort: s.hasMortgage ? s.mortMonthly : 0, mortEnd: s.hasMortgage ? ym(s.mortEnd) - now : -1, hf: s.hasMortgage ? s.hfOffset : 0,
@@ -1312,6 +1312,8 @@ function toParams(s, now) {
   };
 }
 
+const OUTLOOK_GROWTH = { stable: () => 0, up: (s) => s.upRate, down: (s) => -s.downRate };
+const incomeGrowth = (s) => (OUTLOOK_GROWTH[s.outlook] || OUTLOOK_GROWTH.stable)(s);
 const realRate = (pct, infl) => (1 + pct / 100) / (1 + infl / 100) - 1;
 
 const ageYears = (p, t, b) => Math.floor((p.now + t - b) / 12);
@@ -1544,7 +1546,7 @@ function sanitize(raw) {
     const nominal = (k) => {
       if (isNum(raw[k])) s[k] = Math.round(((1 + raw[k] / 100) * (1 + s.infl / 100) - 1) * 1000) / 10;
     };
-    ["ret", "incGrowth", "eduGrowth"].forEach(nominal);
+    ["ret", "eduGrowth"].forEach(nominal);
   }
   s.rates = "nominal";
   return s;
@@ -1709,7 +1711,14 @@ function bodyIncome() {
   const sp = S.hasSpouse;
   return `${two(num("inc1", "你每月到手", "元"), num("bonus1", "你的年终奖", "万/年"))}
     ${sp ? two(num("inc2", "伴侣每月到手", "元"), num("bonus2", "伴侣的年终奖", "万/年")) : ""}
-    ${num("incGrowth", "收入每年涨多少", "%", { hint: "不确定就填 2" })}
+    ${select("outlook", "工作前景", [["stable", "稳定：收入不变"], ["up", "上升：收入每年上涨"], ["down", "下降：收入每年下降"]])}
+    ${
+      S.outlook === "up"
+        ? num("upRate", "每年大概涨", "%", { hint: "参考：2025 年全国城镇私营单位平均工资涨了 3.0%，非私营单位涨了 4.3%（国家统计局）；2024 年分别只涨了 1.7% 和 2.8%。" })
+        : S.outlook === "down"
+          ? num("downRate", "每年大概降", "%", { hint: "比如行业收缩、降薪降级。按每年降 3% 算，10 年后收入约为现在的 74%。" })
+          : `<div class="hint" style="margin:-8px 0 12px">按现在的到手收入一直不变来算，比较稳妥。</div>`
+    }
     <div class="hint" style="margin-top:-4px">都按税后到手填，提前退休后工资和年终奖都没有了。公积金在“负债 → 房贷”里填；房租、兼职等其他收入在“高级设置”里填。</div>`;
 }
 
@@ -1870,7 +1879,7 @@ function bodyAdv() {
     return derived(`${one("你", a)}${b ? `；${one("伴侣", b)}` : ""}。按规定，最低缴费年限 2030 年起每年加半年，2039 年起为 20 年；不够的会在提前退休后自己交补够。`);
   };
   return `<div class="sub-title">投资和备用金</div>
-    ${num("infl", "物价每年上涨", "%", { hint: "一般填 2 就行" })}
+    ${num("infl", "物价每年上涨", "%", { hint: "近两年物价基本没涨，一般填 1 就行" })}
     ${num("floor", "提前退休后至少留的备用金", "万", { hint: "应急金、父母备用金等。提前退休期间存款任何时候都不低于这个数，领养老金时还剩这么多" })}
     ${select("afterPension", "领养老金以后", [["covered", "养老金够日常生活，存款只撑到领养老金"], ["model", "按实际养老金算，存款撑到指定年龄"]])}
     ${S.afterPension === "model" ? num("endAge", "存款要撑到你几岁", "岁", { kind: "int" }) : ""}
@@ -1912,7 +1921,8 @@ const CATS = [
     sum() {
       const sp = S.hasSpouse;
       const bonus = S.bonus1 + (sp ? S.bonus2 : 0);
-      return `每月到手 ${fmt(S.inc1 + (sp ? S.inc2 : 0))} 元${bonus ? ` · 年终奖 ${+bonus.toFixed(1)} 万` : ""}`;
+      const trend = S.outlook === "up" ? `每年涨 ${S.upRate}%` : S.outlook === "down" ? `每年降 ${S.downRate}%` : "收入稳定";
+      return `每月到手 ${fmt(S.inc1 + (sp ? S.inc2 : 0))} 元${bonus ? ` · 年终奖 ${+bonus.toFixed(1)} 万` : ""} · ${trend}`;
     },
   },
   {
@@ -2215,6 +2225,8 @@ function validate(s) {
     });
   }
   if (s.ret <= -50 || s.ret > 30) errs.push("投资收益请填 −50% 到 30% 之间的数。");
+  if (s.outlook === "up" && !(s.upRate >= 0 && s.upRate <= 30)) errs.push("收入每年上涨请填 0% 到 30% 之间的数。");
+  if (s.outlook === "down" && !(s.downRate >= 0 && s.downRate <= 50)) errs.push("收入每年下降请填 0% 到 50% 之间的数。");
   if (s.stage.some((x) => x < 0)) errs.push("孩子的花费不能是负数。");
   return errs;
 }
