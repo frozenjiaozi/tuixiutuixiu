@@ -1918,7 +1918,7 @@ function groupedBars(box, { cats, series, ref }) {
   if (ref) el("line", { x1: m.l, x2: W - m.r, y1: sc.Y(ref.value), y2: sc.Y(ref.value), class: "ref", "pointer-events": "none" }, svg);
 }
 
-function stackedBars(box, { cats, segs, line, xStep, titles }) {
+function stackedBars(box, { cats, segs, line, xStep, titles, save }) {
   box.innerHTML = "";
   const W = 960, H = 300, m = { l: 60, r: 16, t: 16, b: 34 };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart" }, box);
@@ -1947,7 +1947,9 @@ function stackedBars(box, { cats, segs, line, xStep, titles }) {
           segs.map((g) => (g.values[i] > 0.005 ? tipRow(g.color, g.name, `${g.values[i].toFixed(1)} 万`) : "")).join("") +
           tipRow("", "支出合计", `${totals[i].toFixed(1)} 万`) +
           tipRow(line.color, line.name, `${line.values[i].toFixed(1)} 万`) +
-          tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`),
+          (save
+            ? tipRow("", "<b>当年结余</b>", `<b>${(line.values[i] - totals[i]).toFixed(1)} 万</b>`)
+            : tipRow("", "<b>要从存款里拿</b>", `<b>${(totals[i] - line.values[i]).toFixed(1)} 万</b>`)),
         evt
       ));
     hitRect.addEventListener("mouseleave", () => tip.hide());
@@ -2240,6 +2242,27 @@ function renderResults() {
     work: sumPost((r) => r.salary + r.bonus + r.hf),
   };
   const directTotal = postTotals.living + postTotals.child + postTotals.mort + postTotals.si + postTotals.one - postTotals.pension - postTotals.other - postTotals.work + p.floor;
+
+  // 退休前收支 Kv
+  const livingOf = (r) => (r.working ? p.livingWork * r.up : r.living);
+  const pre = a.rows.slice(0, a.T);
+  const sumPre = (f) => pre.reduce((x, r) => x + f(r), 0);
+  const preTotals = {
+    salary: sumPre((r) => r.salary + r.bonus),
+    hf: sumPre((r) => r.hf),
+    other: sumPre((r) => r.other + r.pension),
+    living: sumPre(livingOf),
+    child: sumPre((r) => r.child),
+    house: sumPre((r) => r.rent + r.mort + r.debt),
+    si: sumPre((r) => r.med + r.si),
+    one: sumPre((r) => r.one),
+  };
+  const preIncome = preTotals.salary + preTotals.hf + preTotals.other;
+  const preCost = preTotals.living + preTotals.child + preTotals.house + preTotals.si + preTotals.one;
+  const preSaved = p.assets + preIncome - preCost;
+  const preGain = a.have - preSaved;
+  const preYears = a.T / 12;
+  const houseName = p.rent > 0 ? "房租房贷负债" : "房贷负债";
 
   // 逐年明细数据块
   const blocks = [];
@@ -2560,7 +2583,63 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 7. 提前退休后每年的收支堆叠图 -->
+    <!-- 7. 退休前每年的收支堆叠图 -->
+    <div class="bento-card bento-section">
+      <div class="bento-header">
+        <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"/><path d="M16 10h.01"/><path d="M2 8v1a2 2 0 0 0 2 2h1"/></svg></div>
+        <div>
+          <h2 class="bento-title">退休前每年的收支</h2>
+          <p class="bento-desc">从现在到提前退休，每 12 个月一根柱子。收入线高出柱子的部分会存进存款，继续理财生息。</p>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:#059669;"></i> 日常开支</span>
+        <span><i style="background:#f59e0b;"></i> 孩子</span>
+        <span><i style="background:#8b5cf6;"></i> ${houseName}</span>
+        <span><i style="background:#06b6d4;"></i> 社保医保</span>
+        <span><i style="background:#ec4899;"></i> 大额支出</span>
+        <span><i class="ln"></i> 收入（工资、年终奖${preTotals.hf > 0 ? "、公积金" : ""}${preTotals.other > 0 ? "、其他收入" : ""}）</span>
+      </div>
+      <div class="chart-box" id="chart-pre"></div>
+      <p style="margin:10px 0 0; font-size:12px; color:var(--text-4); font-weight:600;">横轴：你的年龄；纵轴：金额（万元）。最后一根柱子不满 12 个月时按实际月数计算。</p>
+
+      <div style="margin-top:24px; padding-top:20px; border-top:1px solid #f1f5f9; display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+        <div style="background:#f8fafc; border-radius:24px; padding:20px;">
+          <h4 style="margin:0 0 4px; font-size:15px; font-weight:900;">${wan(a.have)} 是怎么来的</h4>
+          <p style="margin:0 0 14px; font-size:12px; color:var(--text-4); font-weight:600;">${shortYM(NOW)}–${shortYM(NOW + a.T - 1)} 合计测算</p>
+          <div class="kv">
+            <span class="k">现在的存款</span><span class="v">${wan(p.assets)}</span>
+            ${preTotals.salary > 0 ? `<span class="k">加：工资和年终奖</span><span class="v">+${wan(preTotals.salary)}</span>` : ""}
+            ${preTotals.hf > 0 ? `<span class="k">加：公积金冲抵房贷</span><span class="v">+${wan(preTotals.hf)}</span>` : ""}
+            ${preTotals.other > 0 ? `<span class="k">加：其他收入</span><span class="v">+${wan(preTotals.other)}</span>` : ""}
+            <span class="k">减：日常开支</span><span class="v">−${wan(preTotals.living)}</span>
+            ${preTotals.child > 0 ? `<span class="k">减：孩子培养花费</span><span class="v">−${wan(preTotals.child)}</span>` : ""}
+            ${preTotals.house > 0 ? `<span class="k">减：${houseName}</span><span class="v">−${wan(preTotals.house)}</span>` : ""}
+            ${preTotals.si > 0 ? `<span class="k">减：社保医保</span><span class="v">−${wan(preTotals.si)}</span>` : ""}
+            ${preTotals.one > 0 ? `<span class="k">减：大额一次性支出</span><span class="v">−${wan(preTotals.one)}</span>` : ""}
+            <div class="sep"></div>
+            <span class="k" style="font-weight:900;">直接加总（存进去的本金）</span><span class="v" style="font-weight:900;">${wan(preSaved)}</span>
+            <span class="k">${preGain >= 0 ? "加：理财收益" : "减：理财亏损"}</span><span class="v">${signedWan(preGain)}</span>
+            <span class="k" style="font-weight:900; color:var(--brand);">提前退休时拥有</span><span class="v total" style="color:var(--brand); font-size:18px;">${wan(a.have)}</span>
+          </div>
+        </div>
+
+        <div style="background:#f8fafc; border-radius:24px; padding:20px;">
+          <h4 style="margin:0 0 14px; font-size:15px; font-weight:900;">工作这 ${durTxt(a.T)}平均下来</h4>
+          <div class="kv">
+            <span class="k">每年收入</span><span class="v">${wan(preIncome / preYears)}</span>
+            <span class="k">每年支出</span><span class="v">${wan(preCost / preYears)}</span>
+            <span class="k">每年存下</span><span class="v">${signedWan((preIncome - preCost) / preYears)}</span>
+            <span class="k">每年理财收益</span><span class="v">${signedWan(preGain / preYears)}</span>
+          </div>
+          <p style="margin:14px 0 0; font-size:12px; color:var(--text-4); line-height:1.7; font-weight:600;">
+            日常开支按物价每年上涨增加，工资按收入预期变化，理财收益随存款变多而增加，所以每年存下的钱并不一样，具体看上面的柱子。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 8. 提前退休后每年的收支堆叠图 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
@@ -2616,7 +2695,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 8. 工作风险分析 -->
+    <!-- 9. 工作风险分析 -->
     <div class="bento-card bento-section">
       <div class="bento-header">
         <div class="bento-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
@@ -2633,7 +2712,7 @@ function renderResults() {
       <div class="chart-box" id="chart-job"></div>
     </div>
 
-    <!-- 9. 压力测试表 -->
+    <!-- 10. 压力测试表 -->
     <div class="bento-card bento-section" style="padding:0; overflow:hidden;">
       <div style="padding:24px 28px 16px;">
         <h2 class="bento-title">压力测试</h2>
@@ -2673,7 +2752,7 @@ function renderResults() {
       </div>
     </div>
 
-    <!-- 10. 逐年明细折叠大表 -->
+    <!-- 11. 逐年明细折叠大表 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">查看逐年详细现金流明细</summary>
       <div style="margin-top:16px; overflow-x:auto;">
@@ -2720,7 +2799,7 @@ function renderResults() {
       </div>
     </details>
 
-    <!-- 11. 政策与算法说明折叠 -->
+    <!-- 12. 政策与算法说明折叠 -->
     <details style="background:var(--card); border-radius:var(--radius-bento); padding:24px 28px; cursor:pointer;">
       <summary style="font-size:16px; font-weight:900; color:#0f172a; user-select:none;">计算方法与政策公式说明</summary>
       <div style="margin-top:16px; font-size:12.5px; color:var(--text-3); font-weight:600; line-height:1.9;">
@@ -2825,23 +2904,29 @@ function drawCharts(p, a, plan, minLine, jobAges, lossHalf, lossPerm) {
     });
   }
 
-  const starts = [];
-  for (let s = a.T; s < a.E; s += 12) starts.push(s);
-  const blk = (f) => starts.map((s) => a.rows.slice(s, s + 12).reduce((x, r) => x + f(r), 0) / 1e4);
-  const cats = starts.map(ageAt);
-  stackedBars(document.getElementById("chart-post"), {
-    cats,
-    titles: starts.map((s, i) => `你 ${cats[i]} 岁（${shortYM(NOW + s)}–${shortYM(NOW + Math.min(s + 12, a.E) - 1)}）`),
-    segs: [
-      { name: "日常开支", color: "#059669", values: blk((r) => r.living) },
-      { name: "孩子", color: "#f59e0b", values: blk((r) => r.child) },
-      { name: "房贷和负债", color: "#8b5cf6", values: blk((r) => r.mort + r.debt) },
-      { name: "社保医保", color: "#06b6d4", values: blk((r) => r.med + r.si) },
-      { name: "大额支出", color: "#ec4899", values: blk((r) => r.one) },
-    ],
-    line: { name: "收入", color: "#0f172a", values: blk((r) => r.pension + r.other + r.salary + r.bonus + r.hf) },
-    xStep: cats.length > 30 ? 5 : cats.length > 15 ? 2 : 1,
-  });
+  // 每 12 个月一根柱子，最后一段截到 to；与桌面端 report.ts 的 cashBars 一致
+  const cashChart = (id, from, to, opts) => {
+    const starts = [];
+    for (let s = from; s < to; s += 12) starts.push(s);
+    const blk = (f) => starts.map((s) => a.rows.slice(s, Math.min(s + 12, to)).reduce((x, r) => x + f(r), 0) / 1e4);
+    const cats = starts.map(ageAt);
+    stackedBars(document.getElementById(id), {
+      cats,
+      titles: starts.map((s, i) => `你 ${cats[i]} 岁（${shortYM(NOW + s)}–${shortYM(NOW + Math.min(s + 12, to) - 1)}）`),
+      segs: [
+        { name: "日常开支", color: "#059669", values: blk((r) => (r.working ? p.livingWork * r.up : r.living)) },
+        { name: "孩子", color: "#f59e0b", values: blk((r) => r.child) },
+        { name: opts.houseName, color: "#8b5cf6", values: blk((r) => r.rent + r.mort + r.debt) },
+        { name: "社保医保", color: "#06b6d4", values: blk((r) => r.med + r.si) },
+        { name: "大额支出", color: "#ec4899", values: blk((r) => r.one) },
+      ],
+      line: { name: "收入", color: "#0f172a", values: blk((r) => r.pension + r.other + r.salary + r.bonus + r.hf) },
+      xStep: cats.length > 30 ? 5 : cats.length > 15 ? 2 : 1,
+      save: opts.save,
+    });
+  };
+  cashChart("chart-pre", 0, a.T, { houseName: p.rent > 0 ? "房租房贷负债" : "房贷负债", save: true });
+  cashChart("chart-post", a.T, a.E, { houseName: "房贷和负债", save: false });
 }
 
 // ==================== 4. 完整家庭财务弹窗 (Modal) ====================
