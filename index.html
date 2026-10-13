@@ -1221,7 +1221,6 @@ const DEFAULTS = {
 const GENDERS = {
   male: { base: 60, start: 1965 * 12, per: 4, max: 36 },
   female55: { base: 55, start: 1970 * 12, per: 4, max: 36 },
-  female50: { base: 50, start: 1975 * 12, per: 2, max: 60 },
 };
 
 const CALC_MONTHS = {
@@ -1485,7 +1484,7 @@ const KEY = "fire-calculator-v2";
 const KEY_V1 = "fire-calculator-v1";
 const STAGES = ["0–2 岁", "3–5 岁（幼儿园）", "6–11 岁（小学）", "12–14 岁（初中）", "15–17 岁（高中）", "18–21 岁（大学）"];
 const STAGE_NAMES = ["婴幼儿", "幼儿园", "小学", "初中", "高中", "大学"];
-const GENDER_OPTS = [["male", "男"], ["female55", "女（原 55 岁退休）"], ["female50", "女（原 50 岁退休）"]];
+const GENDER_OPTS = [["male", "男"], ["female55", "女"]];
 const NOW = nowIndex();
 const thisYear = Math.floor(NOW / 12);
 const todayStr = (() => {
@@ -1533,6 +1532,7 @@ function sanitize(raw) {
       s[k] = v;
     }
   }
+  for (const key of ["me", "spouse"]) if (s[key].gender !== "male") s[key].gender = "female55";
   return s;
 }
 
@@ -1648,7 +1648,6 @@ function personHTML(key, who) {
   return `<div class="person">
     <div class="person-title"><span>${who}</span></div>
     ${two(dateField(`${key}.birth`, "出生日期"), select(`${key}.gender`, "性别", GENDER_OPTS))}
-    ${S[key].gender !== "male" ? `<div class="hint" style="margin:-8px 0 12px">管理、技术岗位一般原来 55 岁退休，工人岗位原来 50 岁。拿不准可以问单位人事。</div>` : ""}
     ${live(`person-${key}`, info)}
   </div>`;
 }
@@ -2609,7 +2608,7 @@ function renderResults() {
 
   <section class="muted" style="line-height:1.8">
     计算方法：按月计算，所有金额按今天的购买力，投资收益为扣除通胀后的实际收益，按月复利。工作期间收入 = 工资 + 年终奖（按月摊）+ 公积金冲抵（失业、降薪时按比例减少）；提前退休后收入 = 养老金 + 其他收入。
-    法定退休时间按 2025 年起施行的渐进式延迟退休规定推算：男性原 60 岁，1965 年起出生的每 4 个月延迟 1 个月，最多到 63 岁；女性原 55 岁的，1970 年起出生的每 4 个月延迟 1 个月，最多到 58 岁；女性原 50 岁的，1975 年起出生的每 2 个月延迟 1 个月，最多到 55 岁。领养老金的最低缴费年限 2030 年起每年加半年，2039 年起为 20 年。
+    法定退休时间按 2025 年起施行的渐进式延迟退休规定推算：男性原 60 岁，1965 年起出生的每 4 个月延迟 1 个月，最多到 63 岁；女性统一按原 55 岁算，1970 年起出生的每 4 个月延迟 1 个月，最多到 58 岁。领养老金的最低缴费年限 2030 年起每年加半年，2039 年起为 20 年。
     房贷和其他负债的月供固定，按通胀折算。失业的月份和提前退休后到领养老金之前，自己交医保。
     养老金公式：基础养老金 =（计发基数 + 本人平均缴费水平）÷ 2 × 缴费年数 × 1%；个人账户养老金 = 账户累计 ÷ 计发月数（55 岁 170、58 岁 152、60 岁 139、63 岁 117 等，按国家计发月数表）。
     “需要的存款”是保证提前退休后每个月存款都不低于备用金的最少金额：默认只算到两人都开始领养老金，之后按养老金够日常生活；也可以改成按实际养老金一直算到指定年龄。“每月最多能花”是让提前退休那个月存款刚好等于这个数的工作期间开销。这是规划测算，不是对收益的承诺。
